@@ -1,3 +1,13 @@
+-- ============================================================
+-- RES-Q CONNECT
+-- Demo / Seed Data
+-- ============================================================
+
+
+-- ============================================================
+-- 1. DEMO RESPONDER
+-- ============================================================
+
 INSERT INTO responders (
     name,
     skills,
@@ -9,13 +19,21 @@ INSERT INTO responders (
 )
 VALUES (
     'Demo Responder 1',
-    'first aid, flood rescue',
+    'first aid, flood rescue, earthquake rescue',
     'medical kit, rescue boat',
     19.9975,
     73.7898,
     'available',
-    ST_SetSRID(ST_MakePoint(73.7898, 19.9975), 4326)::geography
+    ST_SetSRID(
+        ST_MakePoint(73.7898, 19.9975),
+        4326
+    )::geography
 );
+
+
+-- ============================================================
+-- 2. DEMO RESOURCE
+-- ============================================================
 
 INSERT INTO resources (
     resource_name,
@@ -33,8 +51,16 @@ VALUES (
     19.9980,
     73.7905,
     'available',
-    ST_SetSRID(ST_MakePoint(73.7905, 19.9980), 4326)::geography
+    ST_SetSRID(
+        ST_MakePoint(73.7905, 19.9980),
+        4326
+    )::geography
 );
+
+
+-- ============================================================
+-- 3. DEMO ROAD UPDATE
+-- ============================================================
 
 INSERT INTO road_updates (
     road_name,
@@ -54,8 +80,16 @@ VALUES (
     73.7910,
     'verified',
     'DEMO',
-    ST_SetSRID(ST_MakePoint(73.7910, 19.9985), 4326)::geography
+    ST_SetSRID(
+        ST_MakePoint(73.7910, 19.9985),
+        4326
+    )::geography
 );
+
+
+-- ============================================================
+-- 4. DEMO FLOOD RISK ALERT
+-- ============================================================
 
 INSERT INTO risk_alerts (
     disaster_type,
@@ -73,11 +107,20 @@ VALUES (
     19.9990,
     73.7915,
     'DEMO',
-    ST_SetSRID(ST_MakePoint(73.7915, 19.9990), 4326)::geography
+    ST_SetSRID(
+        ST_MakePoint(73.7915, 19.9990),
+        4326
+    )::geography
 );
+
+
+-- ============================================================
+-- 5. DEMO SOS
+-- ============================================================
 
 INSERT INTO sos_cases (
     message,
+    contact_number,
     latitude,
     longitude,
     disaster_type,
@@ -91,6 +134,7 @@ INSERT INTO sos_cases (
 )
 VALUES (
     'Water entered my house',
+    '9999999999',
     19.9975,
     73.7898,
     'flood',
@@ -100,5 +144,13 @@ VALUES (
     'pending',
     'new',
     'DEMO',
-    ST_SetSRID(ST_MakePoint(73.7898, 19.9975), 4326)::geography
+    ST_SetSRID(
+        ST_MakePoint(73.7898, 19.9975),
+        4326
+    )::geography
 );
+
+
+-- ============================================================
+-- END
+-- ============================================================
