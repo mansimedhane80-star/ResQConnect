@@ -17,15 +17,20 @@ def get_weather_data(latitude, longitude):
             "wind_gusts_10m,"
             "soil_moisture_0_to_1cm"
         ),
+        "daily": (
+            "precipitation_sum,"
+            "temperature_2m_max"
+                 ),
         "timezone": "auto"
     }
 
     url = base_url + "?" + urlencode(params)
 
-    with urlopen(url, timeout=10) as response:
+    with urlopen(url, timeout=30) as response:
         data = json.loads(response.read().decode("utf-8"))
 
     current = data["current"]
+    daily = data["daily"]
 
     return {
         "temperature_c": current["temperature_2m"],
@@ -33,7 +38,9 @@ def get_weather_data(latitude, longitude):
         "rain_mm": current["rain"],
         "wind_speed_kmh": current["wind_speed_10m"],
         "wind_gusts_kmh": current["wind_gusts_10m"],
-        "soil_moisture": current["soil_moisture_0_to_1cm"]
+        "soil_moisture": current["soil_moisture_0_to_1cm"],
+        "daily_rainfall_mm": daily["precipitation_sum"][0],
+        "daily_max_temperature_c": daily["temperature_2m_max"][0]
     }
 
 
@@ -49,3 +56,5 @@ if __name__ == "__main__":
     print("Wind Speed:", weather["wind_speed_kmh"], "km/h")
     print("Wind Gusts:", weather["wind_gusts_kmh"], "km/h")
     print("Soil Moisture:", weather["soil_moisture"], "m³/m³")
+    print("Daily Rainfall:",weather["daily_rainfall_mm"],"mm")
+    print("Daily Max Temperature:",weather["daily_max_temperature_c"],"°C")

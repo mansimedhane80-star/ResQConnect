@@ -2,6 +2,7 @@ import json
 from urllib.request import urlopen
 from urllib.parse import urlencode
 from datetime import datetime, timedelta, timezone
+from math import radians, sin, cos, sqrt, atan2
 
 
 def get_earthquake_data(latitude, longitude, radius_km=500):
@@ -40,7 +41,30 @@ def get_earthquake_data(latitude, longitude, radius_km=500):
         })
 
     return earthquakes
+def calculate_distance(lat1, lon1, lat2, lon2):
+    earth_radius_km = 6371
 
+    lat1 = radians(lat1)
+    lon1 = radians(lon1)
+    lat2 = radians(lat2)
+    lon2 = radians(lon2)
+
+    difference_lat = lat2 - lat1
+    difference_lon = lon2 - lon1
+
+    a = (
+        sin(difference_lat / 2) ** 2
+        + cos(lat1)
+        * cos(lat2)
+        * sin(difference_lon / 2) ** 2
+    )
+
+    c = 2 * atan2(
+        sqrt(a),
+        sqrt(1 - a)
+    )
+
+    return earth_radius_km * c
 
 if __name__ == "__main__":
 
