@@ -28,7 +28,6 @@ def analyze_landslide_signal(rainfall_mm, soil_moisture):
 
 if __name__ == "__main__":
 
-    # Temporary test coordinates
     latitude = 19.9975
     longitude = 73.7898
 
@@ -45,9 +44,5 @@ if __name__ == "__main__":
     print("Landslide Analysis")
     print("--------------------")
     print("Rainfall:", factors["rainfall_mm"], "mm")
-    print(
-        "Soil Moisture:",
-        factors["soil_moisture"],
-        "m³/m³"
-    )
+    print("Soil Moisture:", factors["soil_moisture"], "m³/m³")
     print("Landslide Signal:", signal)

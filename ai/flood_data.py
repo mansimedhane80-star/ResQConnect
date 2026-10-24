@@ -90,6 +90,8 @@ if __name__ == "__main__":
     )
 
     print(
-        "\nRiver Discharge Trend:",
-        trend
-    )
+    date,
+    ":",
+    discharge,
+    flood_data["unit"]
+)

@@ -206,7 +206,7 @@ def analyze_risk(disaster_type, latitude, longitude):
 
 if __name__ == "__main__":
 
-    # Temporary test coordinates
+    # Temporary test coordinates for Nashik
     latitude = 19.9975
     longitude = 73.7898
 
@@ -230,8 +230,4 @@ if __name__ == "__main__":
             longitude
         )
 
-        print(
-            disaster,
-            "->",
-            risk
-        )
+        print(disaster, "->", risk)
