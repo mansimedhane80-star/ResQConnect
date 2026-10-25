@@ -1,0 +1,175 @@
+.create-account-page {
+  position: relative;
+  isolation: isolate;
+  min-height: 100vh;
+  padding: 24px;
+  box-sizing: border-box;
+  background-color: #f7f8fa;
+  overflow: hidden;
+}
+
+/* Full-page India map background */
+.create-account-page::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+
+  background-image: url("/india-map.png");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: cover;
+
+  opacity: 0.3;
+}
+
+/* Registration page header */
+.create-account-header {
+  max-width: 900px;
+  margin: 0 auto 28px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.create-account-header h2 {
+  margin: 0 0 4px;
+  font-size: 21px;
+}
+
+.create-account-header p {
+  margin: 0;
+  color: #697586;
+  font-size: 13px;
+}
+
+/* ResQ Connect brand icon */
+.brand-icon {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  background: #e35d42;
+  color: white;
+  font-size: 24px;
+  font-weight: bold;
+}
+
+/* Semi-transparent registration card */
+.create-account-card {
+  width: 100%;
+  max-width: 620px;
+  margin: 0 auto 40px;
+  padding: 32px;
+  box-sizing: border-box;
+
+  border: 1px solid rgba(226, 231, 237, 0.75);
+  border-radius: 18px;
+
+  background: rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+
+  box-shadow: 0 12px 35px rgba(31, 45, 61, 0.09);
+}
+
+.create-account-card .eyebrow {
+  margin: 0 0 8px;
+  color: #d7523a;
+  font-size: 12px;
+  font-weight: bold;
+  letter-spacing: 1.5px;
+}
+
+.create-account-card h1 {
+  margin: 0 0 10px;
+  font-size: 32px;
+}
+
+.form-description {
+  margin: 0 0 24px;
+  color: #505d6e;
+  line-height: 1.6;
+}
+
+/* Form labels */
+.create-account-card form > label:not(.consent-row) {
+  display: block;
+  margin: 16px 0 7px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* Form inputs remain readable */
+.create-account-card input:not([type="checkbox"]),
+.create-account-card select {
+  width: 100%;
+  min-height: 45px;
+  padding: 11px 12px;
+  border: 1px solid #d6dce5;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.9);
+  color: #202b3c;
+  font: inherit;
+  box-sizing: border-box;
+}
+
+.create-account-card input:focus,
+.create-account-card select:focus {
+  outline: 2px solid #f0a08f;
+  border-color: #d7523a;
+}
+
+/* Consent checkbox */
+.consent-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 22px 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.consent-row input {
+  margin-top: 3px;
+}
+
+/* Create account button */
+.create-account-submit {
+  width: 100%;
+  min-height: 48px;
+  border: none;
+  border-radius: 9px;
+  background: #d7523a;
+  color: #fff;
+  font-size: 15px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.create-account-submit:hover {
+  background: #bd432e;
+}
+
+/* Mobile layout */
+@media (max-width: 600px) {
+  .create-account-page {
+    padding: 16px;
+  }
+
+  .create-account-card {
+    padding: 22px 18px;
+  }
+
+  .create-account-card h1 {
+    font-size: 27px;
+  }
+
+  .create-account-page::before {
+    background-position: center;
+    background-size: cover;
+    opacity: 0.25;
+  }
+}
