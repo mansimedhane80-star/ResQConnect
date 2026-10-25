@@ -1,0 +1,720 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap');
+
+:root {
+  font-family: 'DM Sans', Arial, sans-serif;
+  color: #172033;
+  background: #f4f7fb;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.responder-dashboard {
+  min-height: 100vh;
+  background: #f4f7fb;
+  color: #172033;
+  font-family: 'DM Sans', Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.responder-dashboard button {
+  font: inherit;
+  cursor: pointer;
+}
+
+/* Header */
+
+.rd-topbar {
+  min-height: 76px;
+  background: #fff;
+  border-bottom: 1px solid #e6eaf1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 clamp(18px, 4vw, 56px);
+  gap: 20px;
+  position: sticky;
+  top: 0;
+  z-index: 500;
+}
+
+.rd-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.rd-brand-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 13px;
+  background: #fff0ed;
+  color: #df5145;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.rd-brand h1 {
+  font: 800 19px/1.2 'Manrope', sans-serif;
+  margin: 0;
+  letter-spacing: -0.5px;
+}
+
+.rd-brand p {
+  margin: 3px 0 0;
+  color: #7a8496;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 1.3px;
+}
+
+.rd-header-right {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.rd-live-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #21845c;
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.rd-live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #27b477;
+  box-shadow: 0 0 0 4px #e1f7ed;
+}
+
+.rd-logout-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #e3e7ef;
+  border-radius: 10px;
+  background: white;
+  color: #596477;
+  padding: 9px 13px;
+  font-weight: 600;
+}
+
+.rd-logout-button:hover {
+  background: #f7f8fb;
+}
+
+/* Welcome section */
+
+.rd-welcome {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 32px clamp(18px, 4vw, 56px) 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.rd-eyebrow {
+  font-size: 11px;
+  letter-spacing: 1.7px;
+  font-weight: 800;
+  color: #e15b4e;
+  margin: 0 0 8px;
+}
+
+.rd-welcome h2 {
+  font: 800 clamp(23px, 3vw, 31px)/1.2 'Manrope', sans-serif;
+  letter-spacing: -0.7px;
+  margin: 0;
+}
+
+.rd-subtitle {
+  color: #778195;
+  margin: 9px 0 0;
+  font-size: 14px;
+}
+
+.rd-priority-summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #fff;
+  border: 1px solid #f0d9d5;
+  border-radius: 14px;
+  padding: 14px 18px;
+  min-width: 190px;
+  box-shadow: 0 4px 14px #24334d08;
+}
+
+.rd-summary-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: #fff0ed;
+  color: #e15b4e;
+  display: grid;
+  place-items: center;
+}
+
+.rd-priority-summary span {
+  display: block;
+  color: #7b8495;
+  font-size: 12px;
+}
+
+.rd-priority-summary strong {
+  display: block;
+  font: 800 24px 'Manrope', sans-serif;
+  margin-top: 1px;
+}
+
+/* Section headings */
+
+.rd-map-section,
+.rd-incidents-section,
+.rd-roads-section {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 clamp(18px, 4vw, 56px) 28px;
+}
+
+.rd-section-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 15px;
+  margin-bottom: 16px;
+}
+
+.rd-section-heading h3 {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0;
+  font: 800 17px 'Manrope', sans-serif;
+  letter-spacing: -0.25px;
+}
+
+.rd-section-heading h3 svg {
+  color: #e15b4e;
+}
+
+.rd-section-heading p {
+  color: #7c8698;
+  margin: 5px 0 0;
+  font-size: 12px;
+}
+
+.rd-count-badge {
+  white-space: nowrap;
+  border-radius: 20px;
+  background: #fff0ed;
+  color: #d94e43;
+  font-weight: 700;
+  font-size: 11px;
+  padding: 6px 11px;
+}
+
+/* Map */
+
+.rd-map-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 190px;
+  gap: 16px;
+}
+
+.rd-map {
+  height: 350px;
+  min-width: 0;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid #e3e8f0;
+  background: #e9eef3;
+  box-shadow: 0 5px 20px #23314a08;
+}
+
+.rd-leaflet-map {
+  height: 100%;
+  width: 100%;
+  z-index: 1;
+}
+
+.rd-map-legend {
+  background: #fff;
+  border: 1px solid #e7ebf2;
+  border-radius: 16px;
+  padding: 19px 16px;
+  box-shadow: 0 5px 20px #23314a08;
+}
+
+.rd-map-legend h4 {
+  font: 800 13px 'Manrope', sans-serif;
+  margin: 0 0 18px;
+}
+
+.rd-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 13px 0;
+  color: #596477;
+  font-size: 12px;
+}
+
+.rd-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.rd-map-note {
+  border-top: 1px solid #edf0f5;
+  margin-top: 19px;
+  padding-top: 14px;
+  color: #8791a2;
+  display: flex;
+  gap: 8px;
+  font-size: 11px;
+}
+
+.rd-map-note svg {
+  flex-shrink: 0;
+  color: #e15b4e;
+}
+
+.rd-map-note p {
+  margin: 0;
+}
+
+.rd-map-popup p {
+  margin: 3px 0;
+}
+
+.rd-map-popup span {
+  font-size: 12px;
+  color: #687386;
+}
+
+/* Allocated incident cards */
+
+.rd-incidents-section {
+  padding-top: 4px;
+}
+
+.rd-incident-list {
+  display: grid;
+  gap: 12px;
+}
+
+.rd-incident-card {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  gap: 17px;
+  background: #fff;
+  border: 1px solid #e7ebf2;
+  border-radius: 15px;
+  padding: 18px 20px;
+  overflow: hidden;
+  box-shadow: 0 4px 16px #24334d06;
+  transition: box-shadow 0.18s, border-color 0.18s;
+}
+
+.rd-incident-card:hover {
+  border-color: #d6dce7;
+  box-shadow: 0 8px 24px #24334d0c;
+}
+
+.rd-incident-severity {
+  width: 4px;
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+}
+
+.rd-incident-main {
+  flex: 1;
+  min-width: 0;
+  padding-left: 3px;
+}
+
+.rd-incident-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.rd-incident-id {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.7px;
+  color: #8791a2;
+}
+
+.rd-severity-badge {
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.rd-incident-main h4 {
+  font: 800 16px 'Manrope', sans-serif;
+  margin: 8px 0 4px;
+}
+
+.rd-incident-description {
+  margin: 0;
+  color: #788397;
+  font-size: 12px;
+}
+
+.rd-incident-meta {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  color: #697589;
+  font-size: 11px;
+}
+
+.rd-incident-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rd-incident-meta svg {
+  color: #9aa3b1;
+}
+
+.rd-incident-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 10px;
+  min-width: 190px;
+}
+
+.rd-assigned-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 6px 9px;
+  border-radius: 7px;
+  background: #f0f3f8;
+  color: #687386;
+}
+
+.rd-status-assigned {
+  background: #e9f3ff;
+  color: #2868b2;
+}
+
+.rd-status-in-progress {
+  background: #e5f8ee;
+  color: #168253;
+}
+
+.rd-status-pending {
+  background: #fff4df;
+  color: #a66a00;
+}
+
+/* Start rescue button */
+
+.rd-start-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 9px;
+  background: #df5145;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  box-shadow: 0 4px 10px #df514526;
+  transition: background 0.2s, transform 0.2s;
+}
+
+.rd-start-button:hover {
+  background: #c83d33;
+  transform: translateY(-1px);
+}
+
+.rd-operation-started {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 11px;
+  border-radius: 8px;
+  background: #e1f7eb;
+  color: #168253;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+/* Empty state */
+
+.rd-empty-state {
+  background: #fff;
+  border: 1px dashed #d9e0ea;
+  border-radius: 14px;
+  padding: 36px 20px;
+  text-align: center;
+  color: #7c8799;
+}
+
+.rd-empty-state svg {
+  color: #20a36b;
+}
+
+.rd-empty-state h4 {
+  margin: 9px 0 4px;
+  color: #283348;
+  font: 800 15px 'Manrope', sans-serif;
+}
+
+.rd-empty-state p {
+  margin: 0;
+  font-size: 12px;
+}
+
+/* Road conditions */
+
+.rd-roads-section {
+  padding-bottom: 30px;
+}
+
+.rd-road-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 13px;
+}
+
+.rd-road-card {
+  display: flex;
+  gap: 13px;
+  background: #fff;
+  border: 1px solid #e7ebf2;
+  border-radius: 14px;
+  padding: 17px;
+  min-width: 0;
+}
+
+.rd-road-icon {
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  background: #edf4ff;
+  color: #4678c7;
+  display: grid;
+  place-items: center;
+}
+
+.rd-road-info {
+  min-width: 0;
+}
+
+.rd-road-info h4 {
+  margin: 0;
+  font: 800 13px 'Manrope', sans-serif;
+}
+
+.rd-road-info > p {
+  margin: 3px 0 9px;
+  color: #8992a2;
+  font-size: 11px;
+}
+
+.rd-road-status {
+  display: inline-block;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.rd-road-clear {
+  background: #e2f7eb;
+  color: #168253;
+}
+
+.rd-road-heavy-traffic {
+  background: #fff1d9;
+  color: #a76a00;
+}
+
+.rd-road-blocked {
+  background: #ffebe8;
+  color: #cf4237;
+}
+
+.rd-road-detail {
+  margin: 8px 0 0 !important;
+  color: #677286 !important;
+  font-size: 11px !important;
+}
+
+.rd-road-disclaimer {
+  color: #929bad;
+  font-size: 11px;
+  margin: 13px 0 0;
+}
+
+/* Footer */
+
+.rd-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px clamp(18px, 4vw, 56px);
+  background: #fff;
+  border-top: 1px solid #e7ebf2;
+  color: #929bad;
+  font-size: 11px;
+}
+
+/* Tablet layout */
+
+@media (max-width: 800px) {
+  .rd-welcome {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .rd-priority-summary {
+    width: 100%;
+  }
+
+  .rd-map-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .rd-map {
+    height: 320px;
+  }
+
+  .rd-map-legend {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    flex-wrap: wrap;
+  }
+
+  .rd-map-legend h4 {
+    width: 100%;
+    margin: 0;
+  }
+
+  .rd-legend-item {
+    margin: 3px 0;
+  }
+
+  .rd-map-note {
+    width: 100%;
+    margin-top: 8px;
+  }
+
+  .rd-road-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .rd-incident-card {
+    flex-wrap: wrap;
+  }
+
+  .rd-incident-right {
+    width: 100%;
+    min-width: 0;
+    align-items: flex-start;
+    padding-left: 7px;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .rd-topbar {
+    position: static;
+  }
+}
+
+/* Mobile layout */
+
+@media (max-width: 520px) {
+  .rd-topbar {
+    padding: 13px 16px;
+    height: auto;
+    align-items: flex-start;
+  }
+
+  .rd-brand h1 {
+    font-size: 16px;
+  }
+
+  .rd-brand p {
+    font-size: 10px;
+  }
+
+  .rd-header-right {
+    gap: 8px;
+    flex-direction: column;
+    align-items: flex-end;
+  }
+
+  .rd-live-status {
+    font-size: 10px;
+  }
+
+  .rd-logout-button {
+    padding: 7px 9px;
+    font-size: 11px;
+  }
+
+  .rd-welcome {
+    padding-top: 24px;
+  }
+
+  .rd-road-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .rd-map {
+    height: 270px;
+  }
+
+  .rd-incident-card {
+    padding: 15px;
+  }
+
+  .rd-footer {
+    flex-direction: column;
+  }
+
+  .rd-incident-meta {
+    gap: 10px;
+  }
+}
