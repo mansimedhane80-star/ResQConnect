@@ -1,14 +1,14 @@
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import "./App.css";
 
-import CreateAccount from "./CreateAccount";
-import AdminCreateAccount from "./AdminCreateAccount";
-import ResponderLogin from "./ResponderLogin";
-import AdminLogin from "./AdminLogin";
-import CitizenSOS from "./CitizenSOS";
-import ResponderDashboard from "./ResponderDashboard";
-import AdminDashboard from "./AdminDashboard";
+import CreateAccount from "./components/CreateAccount";
+import AdminCreateAccount from "./components/AdminCreateAccount";
+import ResponderLogin from "./components/ResponderLogin";
+import AdminLogin from "./components/AdminLogin";
+import CitizenSOS from "./components/CitizenSOS";
+import ResponderDashboard from "./components/ResponderDashboard";
+import AdminDashboard from "./components/AdminDashboard";
 
 const translations = {
   en: {
@@ -38,6 +38,7 @@ const translations = {
     terms: "Terms",
     support: "Support",
   },
+
   hi: {
     tagline: "लोगों को जोड़ना। जीवन बचाना।",
     hero: "जब हर सेकंड महत्वपूर्ण हो,",
@@ -65,6 +66,7 @@ const translations = {
     terms: "नियम",
     support: "सहायता",
   },
+
   mr: {
     tagline: "लोकांना जोडणे. जीव वाचवणे.",
     hero: "जेव्हा प्रत्येक सेकंद महत्त्वाचा असतो,",
@@ -92,6 +94,7 @@ const translations = {
     terms: "अटी",
     support: "मदत",
   },
+
   ml: {
     tagline: "ആളുകളെ ബന്ധിപ്പിക്കുക. ജീവൻ രക്ഷിക്കുക.",
     hero: "ഓരോ സെക്കൻഡും നിർണായകമാകുമ്പോൾ,",
@@ -119,6 +122,7 @@ const translations = {
     terms: "നിബന്ധനകൾ",
     support: "സഹായം",
   },
+
   ta: {
     tagline: "மக்களை இணைப்போம். உயிர்களைக் காப்போம்.",
     hero: "ஒவ்வொரு நொடியும் முக்கியமானபோது,",
@@ -146,6 +150,7 @@ const translations = {
     terms: "விதிமுறைகள்",
     support: "உதவி",
   },
+
   gu: {
     tagline: "લોકોને જોડીએ. જીવન બચાવીએ.",
     hero: "જ્યારે દરેક સેકન્ડ મહત્વનો હોય,",
@@ -208,26 +213,67 @@ const roles = [
   },
 ];
 
+// Get the current page from the browser URL.
+function getCurrentPage() {
+  return new URLSearchParams(window.location.search).get("page") || "home";
+}
+
 export default function App() {
-  const [page, setPage] = useState("home");
+  const [page, setPage] = useState(getCurrentPage);
+
   const [darkMode, setDarkMode] = useState(false);
   const [message, setMessage] = useState("");
+
   const [language, setLanguage] = useState(
     () => localStorage.getItem("resqLanguage") || "en"
   );
 
   const t = translations[language] || translations.en;
 
+  // Handle browser Back and Forward buttons.
+  useEffect(() => {
+    function handlePopState() {
+      setPage(getCurrentPage());
+      setMessage("");
+    }
+
+    window.addEventListener("popstate", handlePopState);
+
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, []);
+
+  // Change application language.
   function changeLanguage(value) {
     setLanguage(value);
     localStorage.setItem("resqLanguage", value);
   }
 
+  // Navigate between pages and update browser history.
   function goToPage(nextPage) {
     setMessage("");
+
+    if (nextPage === page) return;
+
+    const url = new URL(window.location.href);
+
+    if (nextPage === "home") {
+      url.searchParams.delete("page");
+    } else {
+      url.searchParams.set("page", nextPage);
+    }
+
+    window.history.pushState(
+      { page: nextPage },
+      "",
+      url.pathname + url.search + url.hash
+    );
+
     setPage(nextPage);
   }
 
+  // Admin dashboard.
   if (page === "admin-dashboard") {
     return (
       <AdminDashboard
@@ -236,6 +282,7 @@ export default function App() {
     );
   }
 
+  // Responder dashboard.
   if (page === "responder-dashboard") {
     return (
       <ResponderDashboard
@@ -244,72 +291,64 @@ export default function App() {
     );
   }
 
+  // Admin registration.
   if (page === "admin-register") {
     return (
       <AdminCreateAccount
-        onBack={() => goToPage("home")}
         onSignIn={() => goToPage("admin-login")}
       />
     );
   }
 
+  // Responder registration.
   if (page === "responder-register") {
-    return (
-      <div>
-        <button
-          type="button"
-          onClick={() => goToPage("home")}
-          style={{ margin: "12px", padding: "10px 16px", cursor: "pointer" }}
-        >
-          ← Back to Home
-        </button>
-        <CreateAccount />
-      </div>
-    );
+    return <CreateAccount />;
   }
 
+  // Responder login.
   if (page === "responder-login") {
     return (
       <ResponderLogin
-        onBack={() => goToPage("home")}
         onRegister={() => goToPage("responder-register")}
         onLogin={() => goToPage("responder-dashboard")}
       />
     );
   }
 
+  // Admin login.
   if (page === "admin-login") {
     return (
       <AdminLogin
-        onBack={() => goToPage("home")}
         onRegister={() => goToPage("admin-register")}
         onLogin={() => goToPage("admin-dashboard")}
       />
     );
   }
 
+  // Citizen SOS page.
   if (page === "citizen-sos") {
     return (
       <CitizenSOS
-        onBack={() => goToPage("home")}
         language={language}
         setLanguage={changeLanguage}
       />
     );
   }
 
+  // Home page.
   return (
     <main className={`welcome-page ${darkMode ? "dark-mode" : ""}`}>
       <header className="topbar">
         <a
           className="brand"
-          href="#home"
+          href="/"
           onClick={(event) => {
             event.preventDefault();
             goToPage("home");
           }}
         >
           <div className="brand-icon">R</div>
+
           <div>
             <h2>ResQ Connect</h2>
             <p>Disaster Response &amp; Community Rescue</p>
@@ -319,13 +358,16 @@ export default function App() {
         <div className="header-actions">
           <label className="language-selector">
             <span aria-hidden="true">🌐</span>
+
             <select
               aria-label="Select language"
               value={language}
               onChange={(event) => changeLanguage(event.target.value)}
             >
               {Object.entries(languageNames).map(([code, name]) => (
-                <option key={code} value={code}>{name}</option>
+                <option key={code} value={code}>
+                  {name}
+                </option>
               ))}
             </select>
           </label>
@@ -334,7 +376,9 @@ export default function App() {
             type="button"
             className="theme-toggle"
             onClick={() => setDarkMode((value) => !value)}
-            aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"}
+            aria-label={
+              darkMode ? "Switch to light mode" : "Switch to dark mode"
+            }
           >
             {darkMode ? "☀️" : "🌙"}
           </button>
@@ -354,17 +398,21 @@ export default function App() {
             <span className="accent-text">{t.heroAccent}</span>
           </h1>
 
-          <p className="hero-description">{t.heroDescription}</p>
+          <p className="hero-description">
+            {t.heroDescription}
+          </p>
         </div>
 
         <div className="network-art" aria-hidden="true">
           <div className="network-ring ring-one" />
           <div className="network-ring ring-two" />
           <div className="network-ring ring-three" />
+
           <span className="network-node node-one">+</span>
           <span className="network-node node-two">⌖</span>
           <span className="network-node node-three">✓</span>
           <span className="network-node node-four">+</span>
+
           <div className="network-center">R</div>
         </div>
       </section>
@@ -376,6 +424,7 @@ export default function App() {
             <h2>{t.selectRole}</h2>
             <p className="section-description">{t.choose}</p>
           </div>
+
           <span className="step-label">{t.step}</span>
         </div>
 
@@ -383,16 +432,27 @@ export default function App() {
           {roles.map((role) => (
             <article
               key={role.id}
-              className={`role-card ${role.id === "citizen" ? "featured-card" : ""}`}
+              className={`role-card ${
+                role.id === "citizen" ? "featured-card" : ""
+              }`}
             >
               {role.id === "citizen" && (
                 <span className="recommended-label">{t.quick}</span>
               )}
 
-              <div className={`role-icon ${role.id}-icon`}>{role.icon}</div>
+              <div className={`role-icon ${role.id}-icon`}>
+                {role.icon}
+              </div>
+
               <h3>{t[role.title]}</h3>
-              <p className="role-description">{t[role.description]}</p>
-              <p className="role-detail">{t[role.detail]}</p>
+
+              <p className="role-description">
+                {t[role.description]}
+              </p>
+
+              <p className="role-detail">
+                {t[role.detail]}
+              </p>
 
               {role.id === "citizen" ? (
                 <button
@@ -411,6 +471,7 @@ export default function App() {
                   >
                     {t.login} →
                   </button>
+
                   <button
                     type="button"
                     className="register-button"
@@ -421,7 +482,9 @@ export default function App() {
                 </div>
               )}
 
-              <span className="card-arrow" aria-hidden="true">↗</span>
+              <span className="card-arrow" aria-hidden="true">
+                ↗
+              </span>
             </article>
           ))}
         </div>
@@ -429,6 +492,7 @@ export default function App() {
         {message && (
           <div className="selection-message" role="status">
             <p>{message}</p>
+
             <button
               type="button"
               className="close-message"
@@ -443,6 +507,7 @@ export default function App() {
       <footer className="page-footer">
         <span>© ResQ Connect</span>
         <span>{t.footer}</span>
+
         <nav aria-label="Footer links">
           <a href="#privacy">{t.privacy}</a>
           <a href="#terms">{t.terms}</a>

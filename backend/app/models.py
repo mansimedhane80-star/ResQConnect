@@ -1,4 +1,6 @@
+
 from sqlalchemy import Column, Integer, String, Text, Float, TIMESTAMP, ForeignKey
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.sql import func
 from geoalchemy2 import Geography
 
@@ -28,6 +30,14 @@ class SOSCase(Base):
     urgency = Column(String(20))
     severity = Column(String(20))
     priority_score = Column(Integer)
+
+    vulnerability = Column(
+        JSONB,
+        nullable=False,
+        default=list,
+        server_default="[]"
+    )
+
     verification_status = Column(String(20), server_default="pending")
     case_status = Column(String(20), server_default="new")
     mode = Column(String(10), server_default="LIVE")
