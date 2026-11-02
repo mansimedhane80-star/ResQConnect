@@ -6,44 +6,81 @@ import {
   LockKeyhole,
   Eye,
   EyeOff,
-  ArrowLeft,
   LogIn,
 } from "lucide-react";
 import "./AdminLogin.css";
 
-export default function AdminLogin({ onBack, onRegister, onLogin }) {
+const API_URL = "http://127.0.0.1:8000/api/auth/login";
+
+export default function AdminLogin({ onRegister, onLogin }) {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
+    setMessage("");
 
     if (!identifier.trim() || !password) {
-      setMessage("Please enter your Admin ID or email and password.");
+      setMessage("Please enter your official email and password.");
       return;
     }
 
-    // Open the Admin Dashboard
-    if (onLogin) {
-      onLogin();
-    } else {
-      setMessage("Unable to open the dashboard. Please try again.");
+    try {
+      setLoading(true);
+
+      const response = await fetch(API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: identifier.trim().toLowerCase(),
+          password: password,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail || "Invalid email or password."
+        );
+      }
+
+      if (!data.access_token) {
+        throw new Error("Login response did not contain an access token.");
+      }
+
+      if (data.user && data.user.role !== "authority") {
+        throw new Error("This account does not have administrator access.");
+      }
+
+      localStorage.setItem("resqToken", data.access_token);
+
+      if (data.user) {
+        localStorage.setItem("resqUser", JSON.stringify(data.user));
+      }
+
+      if (typeof onLogin === "function") {
+        onLogin(data);
+      } else {
+        setMessage("Unable to open the dashboard. Please try again.");
+      }
+
+    } catch (error) {
+      setMessage(
+        error.message || "Unable to connect to the server."
+      );
+    } finally {
+      setLoading(false);
     }
   }
 
   return (
     <main className="admin-login-page">
-      <button
-        type="button"
-        className="admin-login-back"
-        onClick={onBack}
-      >
-        <ArrowLeft size={18} />
-        Back to Home
-      </button>
-
       <section className="admin-login-card">
         <div className="admin-login-brand">
           <span className="admin-login-brand-icon">
@@ -64,7 +101,7 @@ export default function AdminLogin({ onBack, onRegister, onLogin }) {
         <form onSubmit={handleSubmit}>
           <div className="admin-login-field">
             <label htmlFor="admin-login-identifier">
-              Admin ID or Official Email
+              Official Email
             </label>
 
             <div className="admin-login-input-wrap">
@@ -74,9 +111,9 @@ export default function AdminLogin({ onBack, onRegister, onLogin }) {
 
               <input
                 id="admin-login-identifier"
-                type="text"
+                type="email"
                 autoComplete="username"
-                placeholder="Enter Admin ID or email"
+                placeholder="Enter your official email"
                 value={identifier}
                 onChange={(event) => setIdentifier(event.target.value)}
                 required
@@ -85,7 +122,9 @@ export default function AdminLogin({ onBack, onRegister, onLogin }) {
           </div>
 
           <div className="admin-login-field">
-            <label htmlFor="admin-login-password">Password</label>
+            <label htmlFor="admin-login-password">
+              Password
+            </label>
 
             <div className="admin-login-input-wrap">
               <span className="admin-login-input-icon">
@@ -108,27 +147,35 @@ export default function AdminLogin({ onBack, onRegister, onLogin }) {
                 aria-label={showPassword ? "Hide password" : "Show password"}
                 onClick={() => setShowPassword((value) => !value)}
               >
-                {showPassword ? <EyeOff size={19} /> : <Eye size={19} />}
+                {showPassword ? (
+                  <EyeOff size={19} />
+                ) : (
+                  <Eye size={19} />
+                )}
               </button>
             </div>
           </div>
 
-          <button className="admin-login-submit" type="submit">
-            Admin Sign In
-            <LogIn size={19} />
+          <button
+            className="admin-login-submit"
+            type="submit"
+            disabled={loading}
+          >
+            {loading ? "Signing In..." : "Admin Sign In"}
+            {!loading && <LogIn size={19} />}
           </button>
 
           {message && (
-            <p className="admin-login-message" role="status">
+            <p className="admin-login-message" role="alert">
               {message}
             </p>
           )}
         </form>
 
         <p className="admin-login-register">
-          Not registered yet?{" "}
+          New administrator?{" "}
           <button type="button" onClick={onRegister}>
-            Create admin account
+            Create Account
           </button>
         </p>
 
