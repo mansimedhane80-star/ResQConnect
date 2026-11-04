@@ -1,11 +1,12 @@
-
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
-  MapPin, ShieldAlert, ArrowLeft, ArrowRight, Check, Users,
+  MapPin, ShieldAlert, ArrowRight, Check, Users,
   HeartPulse, Utensils, House, Route, LocateFixed, Upload,
   UserRound, AlertTriangle
 } from "lucide-react";
 import "./CitizenSOS.css";
+
+const API_URL = "http://127.0.0.1:8000/api/sos/";
 
 const languages = [
   ["en", "English"], ["hi", "हिन्दी"], ["mr", "मराठी"],
@@ -15,9 +16,8 @@ const languages = [
 const translations = {
   en: {
     sub:"CITIZEN EMERGENCY ASSISTANCE", live:"SOS ASSISTANCE",
-    back:"Back to location", exit:"Exit SOS", locationStep:"Location & details",
-    reportStep:"Emergency report", step1:"STEP 01 / 02",
-    heading1:"Need emergency assistance?",
+    locationStep:"Location & details", reportStep:"Emergency report",
+    step1:"STEP 01 / 02", heading1:"Need emergency assistance?",
     intro1:"Share a few details and allow location access so responders can identify where help is needed.",
     basic:"Your basic information", name:"Full name", namePlaceholder:"Enter your name",
     phone:"Mobile number", phonePlaceholder:"Enter contact number",
@@ -46,17 +46,19 @@ const translations = {
     addImage:"Add an image (optional)",
     imageHelp:"Attach a photo of the situation if safe to do so.",
     selected:"Selected:", attached:"Location attached", submit:"Submit SOS",
-    success:"SOS Report Saved", reference:"Incident reference", status:"Status",
-    statusValue:"Open — awaiting backend integration", home:"Return to Home",
+    success:"SOS Report Submitted", reference:"Incident reference", status:"Status",
+    statusValue:"Open — submitted to emergency response system",
     noGeo:"Location is not supported by this browser.",
     requesting:"Requesting GPS permission...",
     locationDetected:"Your current location has been detected.",
     locationDenied:"Location access was denied or unavailable. Enable location permission and try again.",
-    locationRequired:"Please detect your current location before submitting."
+    locationRequired:"Please detect your current location before submitting.",
+    submitting:"Submitting SOS...",
+    submitError:"Unable to submit your SOS report. Please try again."
   },
+
   hi: {
     sub:"नागरिक आपातकालीन सहायता",live:"SOS सहायता",
-    back:"स्थान पर वापस जाएँ",exit:"SOS से बाहर जाएँ",
     locationStep:"स्थान और विवरण",reportStep:"आपातकालीन रिपोर्ट",
     step1:"चरण 01 / 02",heading1:"क्या आपको आपातकालीन सहायता चाहिए?",
     intro1:"कुछ विवरण दें और स्थान की अनुमति दें, ताकि बचाव दल सहायता का स्थान पहचान सकें।",
@@ -85,17 +87,19 @@ const translations = {
     specialPlaceholder:"जैसे बुज़ुर्ग, बच्चा, दिव्यांग व्यक्ति या तत्काल चिकित्सा आवश्यकता",
     addImage:"तस्वीर जोड़ें (वैकल्पिक)",imageHelp:"सुरक्षित हो तो स्थिति की तस्वीर जोड़ें।",
     selected:"चुनी गई फ़ाइल:",attached:"स्थान जोड़ा गया",submit:"SOS भेजें",
-    success:"SOS रिपोर्ट सहेजी गई",reference:"घटना संदर्भ संख्या",status:"स्थिति",
-    statusValue:"खुली — बैकएंड जोड़ना बाकी है",home:"होम पर लौटें",
+    success:"SOS रिपोर्ट भेजी गई",reference:"घटना संदर्भ संख्या",status:"स्थिति",
+    statusValue:"खुली — आपातकालीन प्रतिक्रिया प्रणाली को भेजी गई",
     noGeo:"यह ब्राउज़र स्थान सुविधा का समर्थन नहीं करता।",
     requesting:"GPS अनुमति माँगी जा रही है...",
     locationDetected:"आपका वर्तमान स्थान मिल गया है।",
     locationDenied:"स्थान की अनुमति नहीं मिली या स्थान उपलब्ध नहीं है। अनुमति चालू करके फिर कोशिश करें।",
-    locationRequired:"रिपोर्ट भेजने से पहले अपना वर्तमान स्थान खोजें।"
+    locationRequired:"रिपोर्ट भेजने से पहले अपना वर्तमान स्थान खोजें।",
+    submitting:"SOS भेजा जा रहा है...",
+    submitError:"SOS रिपोर्ट भेजी नहीं जा सकी। कृपया फिर कोशिश करें।"
   },
+
   mr: {
     sub:"नागरिक आपत्कालीन मदत",live:"SOS मदत",
-    back:"स्थानाकडे परत जा",exit:"SOS मधून बाहेर पडा",
     locationStep:"स्थान आणि तपशील",reportStep:"आपत्कालीन अहवाल",
     step1:"टप्पा 01 / 02",heading1:"तुम्हाला आपत्कालीन मदत हवी आहे का?",
     intro1:"काही तपशील द्या आणि स्थानाची परवानगी द्या, जेणेकरून बचाव पथकाला मदतीचे ठिकाण समजेल.",
@@ -124,17 +128,19 @@ const translations = {
     specialPlaceholder:"उदा. ज्येष्ठ नागरिक, लहान मूल, दिव्यांग व्यक्ती किंवा तातडीची वैद्यकीय गरज",
     addImage:"फोटो जोडा (ऐच्छिक)",imageHelp:"सुरक्षित असल्यास परिस्थितीचा फोटो जोडा.",
     selected:"निवडलेली फाइल:",attached:"स्थान जोडले आहे",submit:"SOS पाठवा",
-    success:"SOS अहवाल जतन झाला",reference:"घटनेचा संदर्भ क्रमांक",status:"स्थिती",
-    statusValue:"खुला — बॅकएंड जोडणे बाकी आहे",home:"मुख्यपृष्ठावर परत जा",
+    success:"SOS अहवाल पाठवला",reference:"घटनेचा संदर्भ क्रमांक",status:"स्थिती",
+    statusValue:"खुला — आपत्कालीन प्रतिसाद प्रणालीला पाठवला",
     noGeo:"हा ब्राउझर स्थान सुविधेला समर्थन देत नाही.",
     requesting:"GPS परवानगी मागितली जात आहे...",
     locationDetected:"तुमचे सध्याचे स्थान सापडले आहे.",
     locationDenied:"स्थानाची परवानगी नाकारली गेली किंवा स्थान उपलब्ध नाही. परवानगी सुरू करून पुन्हा प्रयत्न करा.",
-    locationRequired:"अहवाल पाठवण्यापूर्वी तुमचे सध्याचे स्थान शोधा."
+    locationRequired:"अहवाल पाठवण्यापूर्वी तुमचे सध्याचे स्थान शोधा.",
+    submitting:"SOS पाठवत आहे...",
+    submitError:"SOS अहवाल पाठवता आला नाही. कृपया पुन्हा प्रयत्न करा."
   },
+
   ml: {
     sub:"പൗര അടിയന്തര സഹായം",live:"SOS സഹായം",
-    back:"സ്ഥാനത്തേക്ക് മടങ്ങുക",exit:"SOS വിടുക",
     locationStep:"സ്ഥാനവും വിവരങ്ങളും",reportStep:"അടിയന്തര റിപ്പോർട്ട്",
     step1:"ഘട്ടം 01 / 02",heading1:"അടിയന്തര സഹായം ആവശ്യമുണ്ടോ?",
     intro1:"ചില വിവരങ്ങൾ നൽകുകയും ലൊക്കേഷൻ അനുമതി നൽകുകയും ചെയ്യുക; സഹായം ആവശ്യമുള്ള സ്ഥലം രക്ഷാപ്രവർത്തകർക്ക് കണ്ടെത്താം.",
@@ -163,17 +169,19 @@ const translations = {
     specialPlaceholder:"ഉദാ. വയോധികൻ, കുട്ടി, ഭിന്നശേഷിക്കാരൻ, അടിയന്തര വൈദ്യസഹായം",
     addImage:"ചിത്രം ചേർക്കുക (ഐച്ഛികം)",imageHelp:"സുരക്ഷിതമാണെങ്കിൽ സംഭവത്തിന്റെ ചിത്രം ചേർക്കുക.",
     selected:"തിരഞ്ഞെടുത്തത്:",attached:"സ്ഥാനം ചേർത്തു",submit:"SOS സമർപ്പിക്കുക",
-    success:"SOS റിപ്പോർട്ട് സംരക്ഷിച്ചു",reference:"സംഭവ റഫറൻസ്",status:"നില",
-    statusValue:"തുറന്നിരിക്കുന്നു — ബാക്ക്എൻഡ് ബന്ധിപ്പിക്കാനുണ്ട്",home:"ഹോമിലേക്ക് മടങ്ങുക",
+    success:"SOS റിപ്പോർട്ട് സമർപ്പിച്ചു",reference:"സംഭവ റഫറൻസ്",status:"നില",
+    statusValue:"തുറന്നിരിക്കുന്നു — അടിയന്തര പ്രതികരണ സംവിധാനത്തിലേക്ക് അയച്ചു",
     noGeo:"ഈ ബ്രൗസറിൽ ലൊക്കേഷൻ പിന്തുണയില്ല.",
     requesting:"GPS അനുമതി അഭ്യർത്ഥിക്കുന്നു...",
     locationDetected:"നിങ്ങളുടെ നിലവിലെ സ്ഥാനം കണ്ടെത്തി.",
     locationDenied:"ലൊക്കേഷൻ അനുമതി ലഭിച്ചില്ല അല്ലെങ്കിൽ സ്ഥാനം ലഭ്യമല്ല. അനുമതി പ്രവർത്തനക്ഷമമാക്കി വീണ്ടും ശ്രമിക്കുക.",
-    locationRequired:"റിപ്പോർട്ട് സമർപ്പിക്കുന്നതിന് മുമ്പ് നിങ്ങളുടെ സ്ഥാനം കണ്ടെത്തുക."
+    locationRequired:"റിപ്പോർട്ട് സമർപ്പിക്കുന്നതിന് മുമ്പ് നിങ്ങളുടെ സ്ഥാനം കണ്ടെത്തുക.",
+    submitting:"SOS സമർപ്പിക്കുന്നു...",
+    submitError:"SOS റിപ്പോർട്ട് സമർപ്പിക്കാൻ കഴിഞ്ഞില്ല. വീണ്ടും ശ്രമിക്കുക."
   },
+
   ta: {
     sub:"குடிமக்கள் அவசர உதவி",live:"SOS உதவி",
-    back:"இருப்பிடத்திற்குத் திரும்பு",exit:"SOS-இலிருந்து வெளியேறு",
     locationStep:"இருப்பிடம் மற்றும் விவரங்கள்",reportStep:"அவசர அறிக்கை",
     step1:"படி 01 / 02",heading1:"அவசர உதவி தேவையா?",
     intro1:"சில விவரங்களைப் பகிர்ந்து இருப்பிட அனுமதியை வழங்குங்கள். உதவி தேவைப்படும் இடத்தை மீட்புக் குழுவினர் கண்டறிய முடியும்.",
@@ -202,17 +210,19 @@ const translations = {
     specialPlaceholder:"எ.கா. முதியவர், குழந்தை, மாற்றுத்திறனாளி அல்லது அவசர மருத்துவத் தேவை",
     addImage:"படத்தைச் சேர்க்கவும் (விருப்பம்)",imageHelp:"பாதுகாப்பாக இருந்தால் நிலையின் புகைப்படத்தை இணைக்கவும்.",
     selected:"தேர்ந்தெடுக்கப்பட்டது:",attached:"இருப்பிடம் இணைக்கப்பட்டது",submit:"SOS சமர்ப்பிக்கவும்",
-    success:"SOS அறிக்கை சேமிக்கப்பட்டது",reference:"சம்பவக் குறிப்பு எண்",status:"நிலை",
-    statusValue:"திறந்துள்ளது — பின்புற அமைப்பு இணைக்கப்பட வேண்டும்",home:"முகப்புக்குத் திரும்பு",
+    success:"SOS அறிக்கை சமர்ப்பிக்கப்பட்டது",reference:"சம்பவக் குறிப்பு எண்",status:"நிலை",
+    statusValue:"திறந்துள்ளது — அவசரகால அமைப்புக்கு அனுப்பப்பட்டது",
     noGeo:"இந்த உலாவியில் இருப்பிட வசதி ஆதரிக்கப்படவில்லை.",
     requesting:"GPS அனுமதி கோரப்படுகிறது...",
     locationDetected:"உங்கள் தற்போதைய இருப்பிடம் கண்டறியப்பட்டது.",
     locationDenied:"இருப்பிட அனுமதி மறுக்கப்பட்டது அல்லது இருப்பிடம் கிடைக்கவில்லை. அனுமதியை இயக்கி மீண்டும் முயற்சிக்கவும்.",
-    locationRequired:"அறிக்கையைச் சமர்ப்பிக்கும் முன் உங்கள் இருப்பிடத்தைக் கண்டறியவும்."
+    locationRequired:"அறிக்கையைச் சமர்ப்பிக்கும் முன் உங்கள் இருப்பிடத்தைக் கண்டறியவும்.",
+    submitting:"SOS சமர்ப்பிக்கப்படுகிறது...",
+    submitError:"SOS அறிக்கையைச் சமர்ப்பிக்க முடியவில்லை. மீண்டும் முயற்சிக்கவும்."
   },
+
   gu: {
     sub:"નાગરિક કટોકટી સહાય",live:"SOS સહાય",
-    back:"સ્થાન પર પાછા જાઓ",exit:"SOS માંથી બહાર નીકળો",
     locationStep:"સ્થાન અને વિગતો",reportStep:"કટોકટી અહેવાલ",
     step1:"પગલું 01 / 02",heading1:"શું તમને કટોકટીમાં મદદ જોઈએ છે?",
     intro1:"થોડી વિગતો આપો અને સ્થાનની મંજૂરી આપો, જેથી બચાવકર્મીઓ મદદની જરૂરિયાતનું સ્થળ શોધી શકે.",
@@ -221,7 +231,7 @@ const translations = {
     phonePlaceholder:"સંપર્ક નંબર દાખલ કરો",location:"તમારું વર્તમાન સ્થાન",
     locationIntro:"તમારા ઉપકરણનું સ્થાન મેળવવા બ્રાઉઝરને મંજૂરી આપો. કોઓર્ડિનેટ્સ અહેવાલમાં જોડાશે.",
     detected:"સ્થાન મળી ગયું",notDetected:"GPS સ્થાન મળ્યું નથી",
-    useButton:"સ્થાનની મંજૂરી મેળવવા નીચેનું બટન વાપરો.",
+    useButton:"સ્થાનની મંજૂરી મેળવવા નીચેનું બટણ વાપરો.",
     accuracy:"અંદાજિત ચોકસાઈ",metres:"મીટર",detecting:"સ્થાન શોધી રહ્યા છીએ...",
     refresh:"મારું સ્થાન ફરી શોધો",useLocation:"વર્તમાન સ્થાન વાપરો",
     report:"કટોકટીની જાણ કરો",
@@ -241,13 +251,15 @@ const translations = {
     specialPlaceholder:"દા.ત. વૃદ્ધ વ્યક્તિ, બાળક, દિવ્યાંગ વ્યક્તિ અથવા તાત્કાલિક તબીબી જરૂરિયાત",
     addImage:"ચિત્ર ઉમેરો (વૈકલ્પિક)",imageHelp:"સલામત હોય તો પરિસ્થિતિનો ફોટો જોડો.",
     selected:"પસંદ કરેલી ફાઇલ:",attached:"સ્થાન જોડાયું",submit:"SOS મોકલો",
-    success:"SOS અહેવાલ સાચવાયો",reference:"ઘટનાનો સંદર્ભ નંબર",status:"સ્થિતિ",
-    statusValue:"ખુલ્લી — બેકએન્ડ જોડવાનું બાકી છે",home:"મુખ્ય પૃષ્ઠ પર પાછા જાઓ",
+    success:"SOS અહેવાલ મોકલાયો",reference:"ઘટનાનો સંદર્ભ નંબર",status:"સ્થિતિ",
+    statusValue:"ખુલ્લી — કટોકટી પ્રતિસાદ પ્રણાલીને મોકલાઈ",
     noGeo:"આ બ્રાઉઝર સ્થાન સુવિધાને સપોર્ટ કરતું નથી.",
     requesting:"GPS મંજૂરી માંગી રહ્યા છીએ...",
     locationDetected:"તમારું વર્તમાન સ્થાન મળી ગયું છે.",
     locationDenied:"સ્થાનની મંજૂરી નકારી દેવામાં આવી અથવા સ્થાન ઉપલબ્ધ નથી. મંજૂરી ચાલુ કરીને ફરી પ્રયાસ કરો.",
-    locationRequired:"અહેવાલ મોકલતા પહેલાં તમારું વર્તમાન સ્થાન શોધો."
+    locationRequired:"અહેવાલ મોકલતા પહેલાં તમારું વર્તમાન સ્થાન શોધો.",
+    submitting:"SOS મોકલાઈ રહ્યું છે...",
+    submitError:"SOS અહેવાલ મોકલી શકાયો નથી. કૃપા કરીને ફરી પ્રયાસ કરો."
   }
 };
 
@@ -263,7 +275,7 @@ const helpOptions = [
   { id:"road", icon:Route }
 ];
 
-export default function CitizenSOS({ onBack, language = "en", setLanguage }) {
+export default function CitizenSOS({ language = "en", setLanguage }) {
   const [step, setStep] = useState(1);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -278,8 +290,31 @@ export default function CitizenSOS({ onBack, language = "en", setLanguage }) {
   const [image, setImage] = useState(null);
   const [submitted, setSubmitted] = useState(false);
   const [incidentId, setIncidentId] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
   const t = translations[language] || translations.en;
+
+  // Handle browser Back and Forward for SOS form steps.
+  useEffect(() => {
+    function handleBrowserNavigation(event) {
+      setStep(event.state?.citizenSosStep === 2 ? 2 : 1);
+    }
+
+    window.addEventListener("popstate", handleBrowserNavigation);
+
+    return () => {
+      window.removeEventListener("popstate", handleBrowserNavigation);
+    };
+  }, []);
+
+  function goToReportStep() {
+    window.history.pushState(
+      { ...window.history.state, citizenSosStep: 2 },
+      ""
+    );
+    setStep(2);
+  }
 
   function getLocation() {
     if (!navigator.geolocation) {
@@ -316,8 +351,10 @@ export default function CitizenSOS({ onBack, language = "en", setLanguage }) {
     );
   }
 
-  function submitSOS(event) {
+  async function submitSOS(event) {
     event.preventDefault();
+
+    if (submitting) return;
 
     if (!location) {
       setStep(1);
@@ -325,54 +362,70 @@ export default function CitizenSOS({ onBack, language = "en", setLanguage }) {
       return;
     }
 
-    const id = "RQ" + Date.now().toString().slice(-6);
-    const report = {
-      incidentId:id,
-      name,
-      phone,
-      location,
-      disasterType:disaster,
-      description,
-      people:Number(people),
-      requiredHelp:needs,
-      specialNeeds,
-      imageName:image?.name || null,
-      status:"Open",
-      createdAt:new Date().toISOString(),
-      mode:"LIVE"
-    };
+    setSubmitting(true);
+    setSubmitError("");
 
-    const existingReports = JSON.parse(
-      localStorage.getItem("resqCitizenReports") || "[]"
-    );
+    try {
+      const emergencyMessage = `
+Name: ${name.trim()}
+Emergency: ${description.trim()}
+People needing help: ${people}
+Required help: ${needs.length ? needs.join(", ") : "Not specified"}
+Special needs: ${specialNeeds.trim() || "None specified"}
+      `.trim();
 
-    localStorage.setItem(
-      "resqCitizenReports",
-      JSON.stringify([...existingReports, report])
-    );
+      const reportData = {
+        message: emergencyMessage,
+        contact_number: phone.trim(),
+        latitude: location.latitude,
+        longitude: location.longitude,
+        disaster_type: disaster
+      };
 
-    setIncidentId(id);
-    setSubmitted(true);
+      const response = await fetch(API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(reportData)
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        const errorMessage = Array.isArray(data.detail)
+          ? data.detail.map(error => error.msg).join(", ")
+          : data.detail;
+
+        throw new Error(
+          errorMessage || t.submitError
+        );
+      }
+
+      if (!data.case_id) {
+        throw new Error("The server did not return an incident reference.");
+      }
+
+      setIncidentId(data.case_id);
+      setSubmitted(true);
+
+    } catch (error) {
+      console.error("SOS submission error:", error);
+      setSubmitError(error.message || t.submitError);
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
     <main className="citizen-sos-page">
       <header className="sos-header">
-        <button
-          type="button"
-          className="sos-back-button"
-          onClick={() => {
-            if (submitted) onBack();
-            else if (step === 2) setStep(1);
-            else onBack();
-          }}
-        >
-          <ArrowLeft size={18} />
-          {submitted ? t.home : step === 2 ? t.back : t.exit}
-        </button>
+        <div className="sos-header-spacer" />
 
         <div className="sos-brand">
-          <span className="sos-brand-icon"><ShieldAlert size={25} /></span>
+          <span className="sos-brand-icon">
+            <ShieldAlert size={25} />
+          </span>
           <div>
             <strong>ResQConnect</strong>
             <span>{t.sub}</span>
@@ -392,13 +445,17 @@ export default function CitizenSOS({ onBack, language = "en", setLanguage }) {
               ))}
             </select>
           </label>
-          <span className="sos-live-label"><span /> {t.live}</span>
+          <span className="sos-live-label">
+            <span /> {t.live}
+          </span>
         </div>
       </header>
 
       {submitted ? (
         <section className="sos-success-card">
-          <div className="sos-success-icon"><Check size={42} /></div>
+          <div className="sos-success-icon">
+            <Check size={42} />
+          </div>
           <p className="sos-eyebrow">RESQCONNECT • CITIZEN SOS</p>
           <h1>{t.success}</h1>
           <div className="sos-incident-number">
@@ -409,7 +466,6 @@ export default function CitizenSOS({ onBack, language = "en", setLanguage }) {
             <span>{t.status}</span>
             <strong>{t.statusValue}</strong>
           </div>
-          <button className="sos-primary-button" onClick={onBack}>{t.home}</button>
         </section>
       ) : (
         <>
@@ -436,57 +492,87 @@ export default function CitizenSOS({ onBack, language = "en", setLanguage }) {
                 <div className="sos-form-grid">
                   <label className="sos-field">
                     {t.name}
-                    <input value={name}
+                    <input
+                      value={name}
                       onChange={e => setName(e.target.value)}
                       placeholder={t.namePlaceholder}
-                      autoComplete="name" required />
+                      autoComplete="name"
+                      required
+                    />
                   </label>
+
                   <label className="sos-field">
                     {t.phone}
-                    <input type="tel" value={phone}
+                    <input
+                      type="tel"
+                      value={phone}
                       onChange={e => setPhone(e.target.value)}
                       placeholder={t.phonePlaceholder}
-                      autoComplete="tel" required />
+                      autoComplete="tel"
+                      required
+                    />
                   </label>
                 </div>
               </section>
 
               <section className="sos-panel">
                 <h2><MapPin size={21} /> {t.location}</h2>
-                <p className="sos-panel-description">{t.locationIntro}</p>
+                <p className="sos-panel-description">
+                  {t.locationIntro}
+                </p>
+
                 <div className={`sos-location-box ${location ? "location-found" : ""}`}>
                   <span className="sos-location-icon">
                     {location ? <Check size={24} /> : <LocateFixed size={24} />}
                   </span>
+
                   <div>
-                    <strong>{location ? t.detected : t.notDetected}</strong>
+                    <strong>
+                      {location ? t.detected : t.notDetected}
+                    </strong>
                     <p>
                       {location
                         ? `Latitude: ${location.latitude.toFixed(5)}, Longitude: ${location.longitude.toFixed(5)}`
                         : t.useButton}
                     </p>
                     {location && (
-                      <small>{t.accuracy} {Math.round(location.accuracy)} {t.metres}</small>
+                      <small>
+                        {t.accuracy} {Math.round(location.accuracy)} {t.metres}
+                      </small>
                     )}
                   </div>
                 </div>
 
-                <button type="button" className="sos-location-button"
-                  onClick={getLocation} disabled={gettingLocation}>
+                <button
+                  type="button"
+                  className="sos-location-button"
+                  onClick={getLocation}
+                  disabled={gettingLocation}
+                >
                   <MapPin size={19} />
-                  {gettingLocation ? t.detecting : location ? t.refresh : t.useLocation}
+                  {gettingLocation
+                    ? t.detecting
+                    : location
+                      ? t.refresh
+                      : t.useLocation}
                 </button>
 
                 {locationMessage && (
-                  <p className="sos-location-message" role="status">{locationMessage}</p>
+                  <p className="sos-location-message" role="status">
+                    {locationMessage}
+                  </p>
                 )}
               </section>
 
-              <button className="sos-primary-button sos-report-button"
+              <button
+                type="button"
+                className="sos-primary-button sos-report-button"
                 disabled={!name.trim() || !phone.trim() || !location}
-                onClick={() => setStep(2)}>
+                onClick={goToReportStep}
+              >
                 {t.report} <ArrowRight size={20} />
               </button>
+
               <p className="sos-privacy-note">{t.privacy}</p>
             </section>
           ) : (
@@ -502,9 +588,12 @@ export default function CitizenSOS({ onBack, language = "en", setLanguage }) {
                   <h2><AlertTriangle size={21} /> {t.emergency}</h2>
                   <div className="sos-disaster-grid">
                     {disasterTypes.map(type => (
-                      <button type="button" key={type}
+                      <button
+                        type="button"
+                        key={type}
                         className={`sos-disaster-option ${disaster === type ? "selected" : ""}`}
-                        onClick={() => setDisaster(type)}>
+                        onClick={() => setDisaster(type)}
+                      >
                         <span className="sos-radio-dot">
                           {disaster === type && <span />}
                         </span>
@@ -518,10 +607,13 @@ export default function CitizenSOS({ onBack, language = "en", setLanguage }) {
                   <h2>{t.happening}</h2>
                   <label className="sos-field">
                     {t.describe}
-                    <textarea value={description}
+                    <textarea
+                      value={description}
                       onChange={e => setDescription(e.target.value)}
                       placeholder={t.descriptionPlaceholder}
-                      rows={4} required />
+                      rows={4}
+                      required
+                    />
                   </label>
                   <p className="sos-help-text">{t.describeHelp}</p>
                 </section>
@@ -530,9 +622,14 @@ export default function CitizenSOS({ onBack, language = "en", setLanguage }) {
                   <h2><Users size={21} /> {t.peopleHelp}</h2>
                   <label className="sos-field sos-people-field">
                     {t.numberPeople}
-                    <input type="number" min="1" max="1000"
+                    <input
+                      type="number"
+                      min="1"
+                      max="1000"
                       value={people}
-                      onChange={e => setPeople(e.target.value)} required />
+                      onChange={e => setPeople(e.target.value)}
+                      required
+                    />
                   </label>
                 </section>
 
@@ -541,11 +638,15 @@ export default function CitizenSOS({ onBack, language = "en", setLanguage }) {
                   <p className="sos-panel-description">{t.selectAll}</p>
                   <div className="sos-needs-grid">
                     {helpOptions.map(({ id, icon: Icon }) => (
-                      <label key={id}
-                        className={`sos-need-option ${needs.includes(id) ? "selected" : ""}`}>
-                        <input type="checkbox"
+                      <label
+                        key={id}
+                        className={`sos-need-option ${needs.includes(id) ? "selected" : ""}`}
+                      >
+                        <input
+                          type="checkbox"
                           checked={needs.includes(id)}
-                          onChange={() => toggleNeed(id)} />
+                          onChange={() => toggleNeed(id)}
+                        />
                         <span className="sos-custom-checkbox">
                           {needs.includes(id) && <Check size={15} />}
                         </span>
@@ -560,9 +661,12 @@ export default function CitizenSOS({ onBack, language = "en", setLanguage }) {
                   <h2>{t.additional}</h2>
                   <label className="sos-field">
                     {t.special}
-                    <textarea value={specialNeeds}
+                    <textarea
+                      value={specialNeeds}
                       onChange={e => setSpecialNeeds(e.target.value)}
-                      placeholder={t.specialPlaceholder} rows={3} />
+                      placeholder={t.specialPlaceholder}
+                      rows={3}
+                    />
                   </label>
 
                   <label className="sos-upload">
@@ -571,25 +675,50 @@ export default function CitizenSOS({ onBack, language = "en", setLanguage }) {
                       <strong>{t.addImage}</strong>
                       <small>{t.imageHelp}</small>
                     </span>
-                    <input type="file" accept="image/*"
-                      onChange={e => setImage(e.target.files?.[0] || null)} />
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={e => setImage(e.target.files?.[0] || null)}
+                    />
                   </label>
-                  {image && <p className="sos-help-text">{t.selected} {image.name}</p>}
+
+                  {image && (
+                    <p className="sos-help-text">
+                      {t.selected} {image.name}
+                    </p>
+                  )}
                 </section>
 
                 <div className="sos-report-location">
                   <MapPin size={19} />
                   <div>
                     <strong>{t.attached}</strong>
-                    <p>{location.latitude.toFixed(5)}, {location.longitude.toFixed(5)}</p>
+                    <p>
+                      {location.latitude.toFixed(5)}, {location.longitude.toFixed(5)}
+                    </p>
                   </div>
                   <Check size={19} />
                 </div>
 
-                <button type="submit"
+                {submitError && (
+                  <p className="sos-location-message" role="alert">
+                    {submitError}
+                  </p>
+                )}
+
+                <button
+                  type="submit"
                   className="sos-primary-button sos-submit-button"
-                  disabled={!disaster || !description.trim() || Number(people) < 1}>
-                  <ShieldAlert size={21} /> {t.submit}
+                  disabled={
+                    submitting ||
+                    !disaster ||
+                    !description.trim() ||
+                    Number(people) < 1 ||
+                    Number(people) > 1000
+                  }
+                >
+                  <ShieldAlert size={21} />
+                  {submitting ? t.submitting : t.submit}
                 </button>
               </form>
             </section>

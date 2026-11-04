@@ -12,7 +12,6 @@ import {
   IdCard,
   FileCheck,
   CloudUpload,
-  ArrowLeft,
   ShieldCheck,
 } from "lucide-react";
 import "./AdminCreateAccount.css";
@@ -34,7 +33,7 @@ const documents = [
   { name: "organizationId", label: "Organization ID Card", description: "Your official organization ID", Icon: BadgeCheck },
 ];
 
-export default function AdminCreateAccount({ onBack, onSignIn }) {
+export default function AdminCreateAccount({ onSignIn }) {
   const [form, setForm] = useState({
     fullName: "",
     email: "",
@@ -88,10 +87,6 @@ export default function AdminCreateAccount({ onBack, onSignIn }) {
 
   return (
     <main className="admin-page">
-      <button className="admin-back-button" type="button" onClick={onBack}>
-        <ArrowLeft size={18} /> Back to Home
-      </button>
-
       <section className="admin-card">
         <div className="admin-brand">
           <span className="admin-brand-icon">
@@ -134,7 +129,11 @@ export default function AdminCreateAccount({ onBack, onSignIn }) {
                         : "off"
                     }
                     required
-                    minLength={name === "password" || name === "confirmPassword" ? 8 : undefined}
+                    minLength={
+                      name === "password" || name === "confirmPassword"
+                        ? 8
+                        : undefined
+                    }
                   />
                 </div>
               </div>
@@ -171,11 +170,13 @@ export default function AdminCreateAccount({ onBack, onSignIn }) {
                   accept=".pdf,.jpg,.jpeg,.png"
                   onChange={(event) => {
                     const file = event.target.files[0];
+
                     if (file && file.size > 5 * 1024 * 1024) {
                       setMessage("Each document must be smaller than 5 MB.");
                       event.target.value = "";
                       return;
                     }
+
                     setMessage("");
                     updateFile(event);
                   }}

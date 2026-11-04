@@ -6,49 +6,73 @@ import {
   LockKeyhole,
   Eye,
   EyeOff,
-  ArrowLeft,
   LogIn,
 } from "lucide-react";
 import "./ResponderLogin.css";
 
-export default function ResponderLogin({
-  onBack,
-  onRegister,
-  onLogin,
-}) {
+const API_BASE = "http://127.0.0.1:8000/api";
+
+export default function ResponderLogin({ onRegister, onLogin }) {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
 
     if (!identifier.trim() || !password.trim()) {
-      setMessage("Please enter your email/mobile number and password.");
+      setMessage("Please enter your email and password.");
       return;
     }
 
-    setMessage("");
+    try {
+      setLoading(true);
+      setMessage("");
 
-    if (typeof onLogin === "function") {
-      onLogin();
-    } else {
-      setMessage("Unable to open the dashboard. Check App.jsx.");
+      const response = await fetch(`${API_BASE}/auth/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: identifier.trim(),
+          password,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.detail || "Login failed.");
+      }
+
+      const token = data.access_token || data.token;
+      const role = data.user?.role;
+
+      if (!token) {
+        throw new Error("Login succeeded but no access token was returned.");
+      }
+
+      if (role !== "responder") {
+        throw new Error("This account is not registered as a responder.");
+      }
+
+      localStorage.setItem("resqToken", token);
+
+      if (typeof onLogin === "function") {
+        onLogin();
+      }
+    } catch (error) {
+      setMessage(error.message || "Unable to connect to the server.");
+    } finally {
+      setLoading(false);
     }
   }
 
   return (
     <main className="responder-login-page">
-      <button
-        type="button"
-        className="responder-login-back"
-        onClick={onBack}
-      >
-        <ArrowLeft size={18} />
-        Back to Home
-      </button>
-
       <section className="responder-login-card">
         <div className="responder-login-brand">
           <span className="responder-login-brand-icon">
@@ -69,7 +93,7 @@ export default function ResponderLogin({
         <form onSubmit={handleSubmit}>
           <div className="responder-login-field">
             <label htmlFor="responder-identifier">
-              Email Address or Mobile Number
+              Email Address
             </label>
 
             <div className="responder-login-input-wrap">
@@ -79,22 +103,18 @@ export default function ResponderLogin({
 
               <input
                 id="responder-identifier"
-                type="text"
+                type="email"
                 autoComplete="username"
-                placeholder="Enter email or mobile number"
+                placeholder="Enter your email"
                 value={identifier}
-                onChange={(event) =>
-                  setIdentifier(event.target.value)
-                }
+                onChange={(event) => setIdentifier(event.target.value)}
                 required
               />
             </div>
           </div>
 
           <div className="responder-login-field">
-            <label htmlFor="responder-password">
-              Password
-            </label>
+            <label htmlFor="responder-password">Password</label>
 
             <div className="responder-login-input-wrap">
               <span className="responder-login-input-icon">
@@ -107,27 +127,17 @@ export default function ResponderLogin({
                 autoComplete="current-password"
                 placeholder="Enter your password"
                 value={password}
-                onChange={(event) =>
-                  setPassword(event.target.value)
-                }
+                onChange={(event) => setPassword(event.target.value)}
                 required
               />
 
               <button
                 type="button"
                 className="responder-password-toggle"
-                aria-label={
-                  showPassword ? "Hide password" : "Show password"
-                }
-                onClick={() =>
-                  setShowPassword((value) => !value)
-                }
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                onClick={() => setShowPassword((value) => !value)}
               >
-                {showPassword ? (
-                  <EyeOff size={19} />
-                ) : (
-                  <Eye size={19} />
-                )}
+                {showPassword ? <EyeOff size={19} /> : <Eye size={19} />}
               </button>
             </div>
           </div>
@@ -135,13 +145,14 @@ export default function ResponderLogin({
           <button
             className="responder-login-submit"
             type="submit"
+            disabled={loading}
           >
-            Sign In
+            {loading ? "Signing in..." : "Sign In"}
             <LogIn size={19} />
           </button>
 
           {message && (
-            <p className="responder-login-message" role="status">
+            <p className="responder-login-message" role="alert">
               {message}
             </p>
           )}
@@ -150,7 +161,7 @@ export default function ResponderLogin({
         <p className="responder-login-register">
           New responder?{" "}
           <button type="button" onClick={onRegister}>
-            Create account
+            Create Account
           </button>
         </p>
 
