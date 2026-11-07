@@ -1,4 +1,9 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from pathlib import Path
+
+
+BACKEND_ENV_FILE = Path(__file__).resolve().parents[1] / ".env"
+DEFAULT_ADMIN_DOCUMENTS_DIR = Path(__file__).resolve().parents[1] / ".private_documents"
 
 
 class Settings(BaseSettings):
@@ -6,9 +11,23 @@ class Settings(BaseSettings):
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    CORS_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173"
+    ADMIN_DOCUMENTS_DIR: str = str(DEFAULT_ADMIN_DOCUMENTS_DIR)
+    SMTP_HOST: str | None = None
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str | None = None
+    SMTP_PASSWORD: str | None = None
+    SMTP_FROM_EMAIL: str | None = None
+    SMTP_USE_TLS: bool = True
+    TWILIO_ACCOUNT_SID: str | None = None
+    TWILIO_AUTH_TOKEN: str | None = None
+    TWILIO_FROM_NUMBER: str | None = None
+    PUBLIC_WEB_URL: str = "http://localhost:5173"
+    # Configure only an operator-controlled/private Nominatim-compatible endpoint.
+    REVERSE_GEOCODER_URL: str | None = None
+    GEOCODER_USER_AGENT: str = "ResQConnect/1.0"
 
-    class Config:
-        env_file = ".env"
+    model_config = SettingsConfigDict(env_file=BACKEND_ENV_FILE, extra="ignore")
 
 
 settings = Settings()

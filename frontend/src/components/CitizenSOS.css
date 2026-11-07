@@ -688,6 +688,190 @@
   cursor: pointer;
 }
 
+.sos-manual-location {
+  margin-top: 18px;
+  padding: 16px;
+  border: 1px solid #dbe3ec;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.sos-manual-location > p {
+  margin: 0 0 12px;
+  color: #334155;
+  font-size: 0.92rem;
+}
+
+.sos-manual-location .sos-location-button {
+  margin-top: 12px;
+}
+
+.sos-tracking-card {
+  max-width: 720px;
+  text-align: left;
+}
+
+.sos-tracking-card > h1,
+.sos-tracking-card > .sos-eyebrow,
+.sos-tracking-card > .sos-success-icon {
+  text-align: center;
+}
+
+.sos-tracking-meta,
+.sos-responder-summary {
+  display: grid;
+  gap: 0;
+  margin: 18px 0;
+  padding: 14px 16px;
+  border: 1px solid #dbe4ec;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.sos-tracking-meta p,
+.sos-responder-summary p {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 0;
+  padding: 9px 0;
+  border-bottom: 1px solid #edf1f5;
+}
+
+.sos-tracking-meta p:last-child,
+.sos-responder-summary p:last-child {
+  border-bottom: 0;
+}
+
+.sos-tracking-meta span,
+.sos-responder-summary p span {
+  color: #617487;
+}
+
+.sos-tracking-meta strong,
+.sos-responder-summary p strong {
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.sos-tracking-timeline {
+  display: grid;
+  gap: 0;
+  margin: 24px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sos-tracking-timeline li {
+  position: relative;
+  display: flex;
+  min-height: 62px;
+  gap: 13px;
+  color: #758394;
+}
+
+.sos-tracking-timeline li:not(:last-child)::after {
+  position: absolute;
+  top: 30px;
+  bottom: -2px;
+  left: 14px;
+  width: 2px;
+  background: #dce4eb;
+  content: "";
+}
+
+.sos-tracking-timeline li > span {
+  z-index: 1;
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  place-items: center;
+  border: 1px solid #cbd5df;
+  border-radius: 50%;
+  background: #fff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.sos-tracking-timeline li.complete,
+.sos-tracking-timeline li.current {
+  color: #203c53;
+}
+
+.sos-tracking-timeline li.complete > span {
+  border-color: #24764c;
+  background: #24764c;
+  color: #fff;
+}
+
+.sos-tracking-timeline li.current > span {
+  border: 2px solid #1d5b86;
+  color: #1d5b86;
+}
+
+.sos-tracking-timeline li small {
+  display: block;
+  margin-top: 4px;
+  color: #617487;
+  line-height: 1.45;
+}
+
+.sos-responder-summary h2 {
+  margin: 0 0 6px;
+  font-size: 1rem;
+}
+
+.sos-tracking-guidance {
+  padding: 14px 16px;
+  border-left: 3px solid #d08a2c;
+  background: #fff8ec;
+  color: #493819;
+  line-height: 1.55;
+}
+
+.sos-tracking-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 16px;
+}
+
+.sos-tracking-actions button {
+  width: auto;
+  margin: 0;
+}
+
+.sos-new-report-button {
+  display: block;
+  width: fit-content;
+  margin: 18px auto 0;
+}
+
+.sos-tracking-private {
+  color: #68798a;
+  font-size: 0.82rem;
+  text-align: center;
+}
+
+.sos-track-entry { width: min(100% - 32px, 620px); margin: 36px auto; }
+.sos-track-entry form { display: grid; gap: 10px; margin: 22px 0; text-align: left; }
+.sos-track-entry label { color: #24374b; font-weight: 700; }
+.sos-track-entry input { width: 100%; min-height: 48px; padding: 12px; border: 1px solid #cbd5df; border-radius: 8px; font: inherit; }
+.sos-secure-code { margin: 18px 0; padding: 15px; border: 1px solid #d8e1eb; border-radius: 10px; background: #f7fafc; text-align: left; }
+.sos-secure-code span { display: block; margin-bottom: 8px; color: #526477; font-size: .9rem; font-weight: 700; }
+.sos-secure-code code { display: block; overflow-wrap: anywhere; padding: 10px; border-radius: 6px; background: #e9eff5; color: #1d3349; user-select: all; }
+.sos-secure-code p { margin-bottom: 0; color: #617487; font-size: .88rem; }
+.sos-secure-link { display: inline-block; margin: 6px 0 10px; color: #165d87; font-weight: 750; text-decoration: underline; text-underline-offset: 3px; }
+.sos-private-case-details { margin: 18px 0; padding: 16px; border: 1px solid #d8e1eb; border-radius: 10px; text-align: left; }
+.sos-private-case-details h2 { margin: 0 0 12px; font-size: 1.05rem; }
+.sos-private-case-details p { line-height: 1.5; overflow-wrap: anywhere; }
+.sos-recorded-updates { margin: 18px 0; text-align: left; }
+.sos-recorded-updates ul { display: grid; gap: 8px; padding: 0; list-style: none; }
+.sos-recorded-updates li { display: flex; justify-content: space-between; gap: 12px; padding: 10px 12px; border-left: 3px solid #396b8c; background: #f4f8fb; }
+.sos-recorded-updates time { color: #607285; font-size: .9rem; }
+
 @media (max-width: 650px) {
   .sos-header {
     flex-wrap: wrap;
@@ -698,4 +882,17 @@
     width: 100%;
     justify-content: flex-end;
   }
+
+  .sos-tracking-meta p,
+  .sos-responder-summary p {
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .sos-tracking-meta strong,
+  .sos-responder-summary p strong {
+    text-align: left;
+  }
+
+  .sos-recorded-updates li { flex-direction: column; gap: 4px; }
 }

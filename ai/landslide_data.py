@@ -1,4 +1,7 @@
-from weather_data import get_weather_data
+try:
+    from .weather_data import get_weather_data
+except ImportError:  # Support running this module directly for local review.
+    from weather_data import get_weather_data
 
 
 def get_landslide_factors(latitude, longitude):

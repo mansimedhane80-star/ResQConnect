@@ -4,14 +4,15 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from app.database import get_db
-from app.models import SOSCase, RiskAlert, Responder
+from app.models import SOSCase, RiskAlert, Responder, User
+from app.auth import require_admin
 
 router = APIRouter(prefix="/locations", tags=["Locations"])
 
 
 # Get locations of SOS cases, disaster alerts, and responders
 @router.get("/")
-def get_locations(db: Session = Depends(get_db)):
+def get_locations(db: Session = Depends(get_db), _admin: User = Depends(require_admin)):
     try:
         locations = []
 
@@ -57,10 +58,10 @@ def get_locations(db: Session = Depends(get_db)):
 
         return {"locations": locations}
 
-    except Exception as e:
+    except Exception:
         raise HTTPException(
             status_code=500,
-            detail=f"Unable to fetch locations: {str(e)}"
+            detail="Unable to fetch locations"
         )
 
 
@@ -70,7 +71,8 @@ def get_nearby_responders(
     latitude: float = Query(..., ge=-90, le=90),
     longitude: float = Query(..., ge=-180, le=180),
     radius_meters: int = Query(default=5000, gt=0, le=100000),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
 ):
     try:
         search_point = func.ST_GeogFromText(
@@ -117,8 +119,8 @@ def get_nearby_responders(
             "responders": nearby_responders
         }
 
-    except Exception as e:
+    except Exception:
         raise HTTPException(
             status_code=500,
-            detail=f"Unable to find nearby responders: {str(e)}"
+            detail="Unable to find nearby responders"
         )

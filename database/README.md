@@ -1,61 +1,39 @@
 # Res-Q Connect Database
 
-This folder contains the PostgreSQL/PostGIS database setup for the Res-Q Connect project.
+This folder contains the PostgreSQL/PostGIS database setup for ResQConnect.
 
 ## Database
 
-Database name:
+- Database name: `resq_connect`
+- Database technology: PostgreSQL + PostGIS
 
-resq_connect
-
-Database technology:
-
-PostgreSQL + PostGIS
-
-## Tables
-
-The database contains these project tables:
-
-1. users
-   - Stores responder and authority accounts.
-
-2. sos_cases
-   - Stores citizen emergency/SOS reports.
-
-3. risk_alerts
-   - Stores disaster risk alerts.
-
-4. responders
-   - Stores responder information, skills, equipment and location.
-
-5. resources
-   - Stores available rescue resources and their locations.
-
-6. road_updates
-   - Stores road and bridge condition updates.
-
-7. case_assignments
-   - Connects SOS cases with responders.
+The database stores users, SOS cases, risk alerts, responders, resources, road
+updates, assignments, notification deduplication records, cached geocodes, and
+tracking-attempt counters.
 
 ## Files
 
-### schema.sql
+- `schema.sql` creates the project tables, location fields, and spatial indexes.
+- `seed.sql` adds demo responder, resource, road update, risk alert, and SOS
+  data. Use it only in a development database.
+- `migrations/` contains incremental changes for existing databases.
 
-Creates all project tables, location fields and spatial indexes.
+## Existing database migrations
 
-### seed.sql
+Apply these files in order from the repository root with `psql` (configure your local
+PostgreSQL connection using your usual private connection settings):
 
-Adds demo data for testing:
+```powershell
+psql -d resq_connect -f database/migrations/20261105_admin_applications_and_sos_tracking.sql
+psql -d resq_connect -f database/migrations/20261107_notification_log.sql
+psql -d resq_connect -f database/migrations/20261107_tracking_codes_and_geocode_cache.sql
+```
 
-- Demo responder
-- Demo rescue boat
-- Demo road update
-- Demo flood-risk alert
-- Demo SOS case
+The migrations add administrator applications and hashed SOS tracking,
+notification deduplication, and the geocode cache plus tracking-attempt
+limiter. They preserve existing SOS rows and coordinates. The tracking code
+upgrade does not rewrite previously stored token hashes, so existing links
+remain valid.
 
-## Loading the database
-
-Connect to PostgreSQL:
-
-```sql
-\c resq_connect
+For a new development database, create the database with PostGIS enabled and
+apply `schema.sql`; do not also apply migrations that create the same tables.

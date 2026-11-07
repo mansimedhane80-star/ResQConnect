@@ -1,4 +1,7 @@
-from sos_classifier import analyze_sos
+try:
+    from .sos_classifier import analyze_sos
+except ImportError:  # Support running this module directly for local review.
+    from sos_classifier import analyze_sos
 
 
 # --------------------------------------------------

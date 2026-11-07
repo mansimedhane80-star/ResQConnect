@@ -850,3 +850,20 @@
     width: 100%;
   }
 }
+.rd-status-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin: 16px 0 24px; }
+.rd-status-card { background: #fff; border: 1px solid #dbe3ed; border-radius: 12px; padding: 14px 16px; text-align: left; cursor: pointer; color: #334155; }
+.rd-status-card strong { display: block; font-size: 1.5rem; margin-top: 5px; }
+.rd-status-card.active { border-color: #2563eb; box-shadow: 0 0 0 2px #2563eb20; }
+.rd-priority-summary { text-align: left; color: inherit; font: inherit; cursor: pointer; }
+.rd-priority-summary:focus-visible, .rd-status-card:focus-visible { outline: 3px solid #2563eb; outline-offset: 2px; }
+@media (max-width: 600px) { .rd-status-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.rd-account-button { display: inline-flex; align-items: center; gap: 6px; padding: 8px 10px; border: 1px solid #dbe3ed; border-radius: 8px; background: #fff; color: #334155; cursor: pointer; }
+.rd-profile-panel { background: #fff; border: 1px solid #dbe3ed; border-radius: 12px; padding: 18px; margin: 12px 0; }
+.rd-incident-location-details { display: grid; gap: 5px; margin: 10px 0; color: #43556b; font-size: 13px; }
+.rd-incident-location-details p { display: flex; align-items: flex-start; gap: 6px; margin: 0; overflow-wrap: anywhere; }
+.rd-incident-location-details svg { flex: 0 0 auto; margin-top: 2px; }
+.rd-incident-location-details a { color: #245b86; font-weight: 650; text-decoration: underline; text-underline-offset: 2px; }
+.rd-password-form { display: grid; gap: 12px; max-width: 520px; }
+.rd-password-form label { display: grid; gap: 6px; }
+.rd-password-form input { padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; }
+@media (max-width: 700px) { .rd-header-right { flex-wrap: wrap; } }

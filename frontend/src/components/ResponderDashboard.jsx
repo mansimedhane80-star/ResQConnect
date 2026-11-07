@@ -1,5 +1,5 @@
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   MapContainer,
@@ -22,12 +22,13 @@ import {
   Phone,
   MapPinned,
   LocateFixed,
+  UserRound,
+  Settings,
 } from "lucide-react";
 
 import "leaflet/dist/leaflet.css";
 import "./ResponderDashboard.css";
-
-const API_BASE = "http://127.0.0.1:8000/api";
+import { API_BASE } from "../api";
 
 const severityColors = {
   Critical: "#dc2626",
@@ -99,11 +100,29 @@ function hasValidCoordinates(latitude, longitude) {
   );
 }
 
+function getAddressLabel(address) {
+  if (!address) return "";
+  return address.display_name || [address.house_number, address.building, address.road,
+    address.locality, address.city, address.district, address.state, address.postal_code]
+    .filter(Boolean).join(", ");
+}
+
+function getMapUrl(latitude, longitude) {
+  if (!hasValidCoordinates(latitude, longitude)) return null;
+  return `https://www.openstreetmap.org/?mlat=${latitude}&mlon=${longitude}#map=18/${latitude}/${longitude}`;
+}
+
 function ResponderDashboard({ onLogout }) {
   const [incidents, setIncidents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [actionLoading, setActionLoading] = useState(null);
+  const [assignmentFilter, setAssignmentFilter] = useState(() => new URLSearchParams(window.location.search).get("filter") || "all");
+  const [accountView, setAccountView] = useState("");
+  const [profile, setProfile] = useState(null);
+  const [passwordForm, setPasswordForm] = useState({ current_password: "", new_password: "", confirm_password: "" });
+  const [settingsMessage, setSettingsMessage] = useState("");
+  const didMountFilterScroll = useRef(false);
 
   // Responder location states
   const [locationLoading, setLocationLoading] = useState(false);
@@ -135,6 +154,7 @@ function ResponderDashboard({ onLogout }) {
       if (!response.ok) {
         throw new Error(data.detail || "Unable to fetch responder profile.");
       }
+      setProfile(data);
 
       if (
         hasValidCoordinates(data.latitude, data.longitude)
@@ -150,6 +170,22 @@ function ResponderDashboard({ onLogout }) {
       console.error("Profile location error:", err);
     }
   }, [token]);
+
+  const savePassword = async (event) => {
+    event.preventDefault();
+    setSettingsMessage("");
+    try {
+      const response = await fetch(`${API_BASE}/auth/change-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(passwordForm),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "Unable to change password.");
+      setSettingsMessage(`${data.message} Please sign out and sign in again.`);
+      setPasswordForm({ current_password: "", new_password: "", confirm_password: "" });
+    } catch (err) { setSettingsMessage(err.message); }
+  };
 
   // ------------------------------------------
   // FETCH ASSIGNMENTS
@@ -199,6 +235,36 @@ function ResponderDashboard({ onLogout }) {
     fetchAssignments();
     fetchResponderLocation();
   }, [fetchAssignments, fetchResponderLocation]);
+
+  useEffect(() => {
+    function restoreFilterFromHistory() {
+      const params = new URLSearchParams(window.location.search);
+      setAssignmentFilter(params.get("section") === "assignments" ? params.get("filter") || "all" : "all");
+    }
+    window.addEventListener("popstate", restoreFilterFromHistory);
+    return () => window.removeEventListener("popstate", restoreFilterFromHistory);
+  }, []);
+
+  useEffect(() => {
+    if (!didMountFilterScroll.current) {
+      didMountFilterScroll.current = true;
+      return;
+    }
+    document.getElementById("rd-incidents-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [assignmentFilter]);
+
+  function selectAssignmentFilter(filter) {
+    const url = new URL(window.location.href);
+    url.searchParams.set("page", "responder-dashboard");
+    url.searchParams.set("section", "assignments");
+    url.searchParams.set("filter", filter);
+    if (url.search === window.location.search && assignmentFilter === filter) {
+      document.getElementById("rd-incidents-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    window.history.pushState({ page: "responder-dashboard", section: "assignments", filter }, "", url.pathname + url.search);
+    setAssignmentFilter(filter);
+  }
 
   // ------------------------------------------
   // SHARE RESPONDER LOCATION
@@ -386,20 +452,14 @@ function ResponderDashboard({ onLogout }) {
     );
   });
 
-  const activeIncidents = sortedIncidents.filter(
-    (incident) =>
-      incident.assignment_status !== "completed"
-  );
-
-  const criticalCount = activeIncidents.filter(
-    (incident) => getSeverity(incident) === "Critical"
-  ).length;
+  const criticalAssignments = sortedIncidents.filter((item) => item.assignment_status !== "completed" && getSeverity(item) === "Critical");
+  const shownAssignments = sortedIncidents.filter((item) => assignmentFilter === "all" || (assignmentFilter === "critical" ? item.assignment_status !== "completed" && getSeverity(item) === "Critical" : item.assignment_status === assignmentFilter));
 
   // ------------------------------------------
   // VALID INCIDENT LOCATIONS
   // ------------------------------------------
 
-  const mappedIncidents = incidents.filter(
+  const mappedIncidents = shownAssignments.filter(
     (incident) =>
       hasValidCoordinates(
         incident.latitude,
@@ -443,6 +503,9 @@ function ResponderDashboard({ onLogout }) {
             Operations Active
           </span>
 
+          <button type="button" className="rd-account-button" onClick={() => setAccountView(accountView === "profile" ? "" : "profile")}><UserRound size={16} />Profile</button>
+          <button type="button" className="rd-account-button" onClick={() => setAccountView(accountView === "settings" ? "" : "settings")}><Settings size={16} />Settings</button>
+
           <button
             className="rd-logout-button"
             type="button"
@@ -467,16 +530,31 @@ function ResponderDashboard({ onLogout }) {
           </p>
         </div>
 
-        <div className="rd-priority-summary">
+        <button type="button" className="rd-priority-summary" onClick={() => selectAssignmentFilter("critical")} aria-label={`Show ${criticalAssignments.length} critical emergencies`}>
           <div className="rd-summary-icon">
             <AlertTriangle size={21} />
           </div>
 
           <div>
             <span>Critical emergencies</span>
-            <strong>{criticalCount}</strong>
+            <strong>{criticalAssignments.length}</strong>
           </div>
-        </div>
+        </button>
+      </section>
+
+      {accountView === "profile" && <section className="rd-profile-panel"><h3>My Profile</h3>{profile ? <dl><dt>Name</dt><dd>{profile.name}</dd><dt>Email</dt><dd>{profile.email}</dd><dt>Role</dt><dd>Responder</dd><dt>Phone</dt><dd>{profile.phone || "Not on file"}</dd><dt>Skills</dt><dd>{profile.skills || "Not on file"}</dd><dt>Equipment</dt><dd>{profile.equipment || "Not on file"}</dd></dl> : <p>Profile details are unavailable.</p>}</section>}
+      {accountView === "settings" && <form className="rd-profile-panel rd-password-form" onSubmit={savePassword}><h3>Settings · Change password</h3><label>Current password<input type="password" autoComplete="current-password" required value={passwordForm.current_password} onChange={(e) => setPasswordForm({ ...passwordForm, current_password: e.target.value })} /></label><label>New password<input type="password" autoComplete="new-password" minLength={8} maxLength={128} required value={passwordForm.new_password} onChange={(e) => setPasswordForm({ ...passwordForm, new_password: e.target.value })} /></label><label>Confirm new password<input type="password" autoComplete="new-password" minLength={8} maxLength={128} required value={passwordForm.confirm_password} onChange={(e) => setPasswordForm({ ...passwordForm, confirm_password: e.target.value })} /></label><button type="submit" className="rd-start-button">Update password</button>{settingsMessage && <p role="status">{settingsMessage}</p>}</form>}
+
+      <section className="rd-status-cards" aria-label="Assignment status filters">
+        {[
+          ["pending", "Assigned", incidents.filter((item) => item.assignment_status === "pending").length],
+          ["accepted", "In progress", incidents.filter((item) => item.assignment_status === "accepted").length],
+          ["completed", "Completed", incidents.filter((item) => item.assignment_status === "completed").length],
+          ["critical", "Critical", criticalAssignments.length],
+          ["all", "All cases", incidents.length],
+        ].map(([key, label, count]) => <button key={key} type="button" className={`rd-status-card ${assignmentFilter === key ? "active" : ""}`} onClick={() => selectAssignmentFilter(key)}>
+          <span>{label}</span><strong>{count}</strong>
+        </button>)}
       </section>
 
       {/* LOCATION SHARING */}
@@ -626,8 +704,10 @@ function ResponderDashboard({ onLogout }) {
                         </strong>
 
                         <p>Case ID: {incident.case_id}</p>
+                        <p>{getAddressLabel(incident.location_address) || "Readable address unavailable"}</p>
 
                         <span>Severity: {severity}</span>
+                        {getMapUrl(incident.latitude, incident.longitude) && <p><a href={getMapUrl(incident.latitude, incident.longitude)} target="_blank" rel="noreferrer">Open map ↗</a></p>}
 
                         <br />
 
@@ -698,7 +778,7 @@ function ResponderDashboard({ onLogout }) {
 
       {/* ASSIGNED EMERGENCIES */}
 
-      <section className="rd-incidents-section">
+      <section className="rd-incidents-section" id="rd-incidents-section">
         <div className="rd-section-heading">
           <div>
             <h3>
@@ -726,7 +806,7 @@ function ResponderDashboard({ onLogout }) {
             </div>
           )}
 
-          {!loading && !error && sortedIncidents.map((incident) => {
+          {!loading && !error && shownAssignments.map((incident) => {
             const severity = getSeverity(incident);
 
             const status = String(
@@ -774,17 +854,13 @@ function ResponderDashboard({ onLogout }) {
                     {incident.message}
                   </p>
 
-                  <div className="rd-incident-meta">
-                    <span>
-                      <MapPin size={15} />
-                      {hasValidCoordinates(
-                        incident.latitude,
-                        incident.longitude
-                      )
-                        ? `${Number(incident.latitude).toFixed(5)}, ${Number(incident.longitude).toFixed(5)}`
-                        : "Coordinates unavailable"}
-                    </span>
+                  <div className="rd-incident-location-details">
+                    <p><MapPin size={15} /><span>{getAddressLabel(incident.location_address) || "Readable address unavailable; use coordinates."}</span></p>
+                    <p><span>Coordinates: {hasValidCoordinates(incident.latitude, incident.longitude) ? `${Number(incident.latitude).toFixed(6)}, ${Number(incident.longitude).toFixed(6)}` : "Unavailable"}</span></p>
+                    {getMapUrl(incident.latitude, incident.longitude) && <a href={getMapUrl(incident.latitude, incident.longitude)} target="_blank" rel="noreferrer">Open location map ↗</a>}
+                  </div>
 
+                  <div className="rd-incident-meta">
                     <span>
                       <Clock size={15} />
                       {formatDate(incident.assigned_at)}
@@ -872,6 +948,7 @@ function ResponderDashboard({ onLogout }) {
               </p>
             </div>
           )}
+          {!loading && !error && shownAssignments.length === 0 && <div className="rd-empty-state"><h4>No cases in this view</h4><p>Assignments will appear here when they are sent to your account.</p></div>}
 
         </div>
       </section>

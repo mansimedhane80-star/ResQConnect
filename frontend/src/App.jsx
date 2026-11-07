@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import "./App.css";
 
 import CreateAccount from "./components/CreateAccount";
@@ -9,6 +9,7 @@ import AdminLogin from "./components/AdminLogin";
 import CitizenSOS from "./components/CitizenSOS";
 import ResponderDashboard from "./components/ResponderDashboard";
 import AdminDashboard from "./components/AdminDashboard";
+import { API_BASE } from "./api";
 
 const translations = {
   en: {
@@ -220,6 +221,9 @@ function getCurrentPage() {
 
 export default function App() {
   const [page, setPage] = useState(getCurrentPage);
+  const previousPage = useRef(page);
+  const [sessionStatus, setSessionStatus] = useState("checking");
+  const [publicCases, setPublicCases] = useState([]);
 
   const [darkMode, setDarkMode] = useState(false);
   const [message, setMessage] = useState("");
@@ -230,10 +234,95 @@ export default function App() {
 
   const t = translations[language] || translations.en;
 
+  useEffect(() => {
+    if (page !== "home") return;
+    fetch(`${API_BASE}/cases/public/completed`, { cache: "no-store" })
+      .then((response) => response.ok ? response.json() : [])
+      .then((items) => setPublicCases(Array.isArray(items) ? items : []))
+      .catch(() => setPublicCases([]));
+  }, [page]);
+
+  useEffect(() => {
+    const requiredRole = page === "admin-dashboard" ? "authority" : page === "responder-dashboard" ? "responder" : null;
+    if (!requiredRole) {
+      setSessionStatus("ready");
+      return;
+    }
+
+    const token = localStorage.getItem("resqToken");
+    if (!token) {
+      localStorage.removeItem("resqUser");
+      setSessionStatus("ready");
+      const loginPage = requiredRole === "authority" ? "admin-login" : "responder-login";
+      const url = new URL(window.location.href);
+      url.searchParams.set("page", loginPage);
+      window.history.replaceState({ page: loginPage }, "", url.pathname + url.search);
+      previousPage.current = loginPage;
+      setPage(loginPage);
+      return;
+    }
+
+    const controller = new AbortController();
+    setSessionStatus("checking");
+    fetch(`${API_BASE}/auth/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+      signal: controller.signal,
+    }).then(async (response) => {
+      if (!response.ok) throw new Error("Session expired");
+      const user = await response.json();
+      if (user.role !== requiredRole) throw new Error("Role mismatch");
+      localStorage.setItem("resqUser", JSON.stringify(user));
+      setSessionStatus("ready");
+    }).catch((error) => {
+      if (error.name === "AbortError") return;
+      localStorage.removeItem("resqToken");
+      localStorage.removeItem("resqUser");
+      const loginPage = requiredRole === "authority" ? "admin-login" : "responder-login";
+      const url = new URL(window.location.href);
+      url.searchParams.set("page", loginPage);
+      window.history.replaceState({ page: loginPage }, "", url.pathname + url.search);
+      previousPage.current = loginPage;
+      setPage(loginPage);
+      setSessionStatus("ready");
+    });
+    return () => controller.abort();
+  }, [page]);
+
+  function logoutTo(loginPage) {
+    localStorage.removeItem("resqToken");
+    localStorage.removeItem("resqUser");
+    const url = new URL(window.location.href);
+    url.searchParams.set("page", loginPage);
+    url.hash = "";
+    window.history.replaceState({ page: loginPage }, "", url.pathname + url.search);
+    previousPage.current = loginPage;
+    setMessage("");
+    setPage(loginPage);
+  }
+
+  function enterPortal(portalPage) {
+    const url = new URL(window.location.href);
+    url.searchParams.set("page", portalPage);
+    url.searchParams.delete("section");
+    url.searchParams.delete("filter");
+    url.hash = "";
+    // Replace the login entry so Back returns outside the portal, not to login.
+    window.history.replaceState({ page: portalPage }, "", url.pathname + url.search);
+    previousPage.current = portalPage;
+    setSessionStatus("checking");
+    setPage(portalPage);
+  }
+
   // Handle browser Back and Forward buttons.
   useEffect(() => {
     function handlePopState() {
-      setPage(getCurrentPage());
+      const nextPage = getCurrentPage();
+      if (nextPage !== previousPage.current && ["admin-dashboard", "responder-dashboard"].includes(nextPage)) {
+        setSessionStatus("checking");
+      }
+      previousPage.current = nextPage;
+      setPage(nextPage);
       setMessage("");
     }
 
@@ -263,6 +352,7 @@ export default function App() {
     } else {
       url.searchParams.set("page", nextPage);
     }
+    if (nextPage !== "citizen-track") url.hash = "";
 
     window.history.pushState(
       { page: nextPage },
@@ -270,23 +360,28 @@ export default function App() {
       url.pathname + url.search + url.hash
     );
 
+    previousPage.current = nextPage;
     setPage(nextPage);
   }
 
   // Admin dashboard.
   if (page === "admin-dashboard") {
+    if (sessionStatus !== "ready" || !localStorage.getItem("resqToken")) return <main role="status" className="session-loading">Verifying session…</main>;
+    if (getCurrentPage() !== "admin-dashboard") return null;
     return (
       <AdminDashboard
-        onLogout={() => goToPage("admin-login")}
+        onLogout={() => logoutTo("admin-login")}
       />
     );
   }
 
   // Responder dashboard.
   if (page === "responder-dashboard") {
+    if (sessionStatus !== "ready" || !localStorage.getItem("resqToken")) return <main role="status" className="session-loading">Verifying session…</main>;
+    if (getCurrentPage() !== "responder-dashboard") return null;
     return (
       <ResponderDashboard
-        onLogout={() => goToPage("responder-login")}
+        onLogout={() => logoutTo("responder-login")}
       />
     );
   }
@@ -302,7 +397,7 @@ export default function App() {
 
   // Responder registration.
   if (page === "responder-register") {
-    return <CreateAccount />;
+    return <CreateAccount onSignIn={() => goToPage("responder-login")} />;
   }
 
   // Responder login.
@@ -310,7 +405,7 @@ export default function App() {
     return (
       <ResponderLogin
         onRegister={() => goToPage("responder-register")}
-        onLogin={() => goToPage("responder-dashboard")}
+        onLogin={() => enterPortal("responder-dashboard")}
       />
     );
   }
@@ -320,7 +415,7 @@ export default function App() {
     return (
       <AdminLogin
         onRegister={() => goToPage("admin-register")}
-        onLogin={() => goToPage("admin-dashboard")}
+        onLogin={() => enterPortal("admin-dashboard")}
       />
     );
   }
@@ -333,6 +428,10 @@ export default function App() {
         setLanguage={changeLanguage}
       />
     );
+  }
+
+  if (page === "citizen-track") {
+    return <CitizenSOS language={language} setLanguage={changeLanguage} initialTracking onNewReport={() => goToPage("citizen-sos")} />;
   }
 
   // Home page.
@@ -488,6 +587,20 @@ export default function App() {
             </article>
           ))}
         </div>
+
+        <button
+          type="button"
+          className="track-existing-link"
+          onClick={() => goToPage("citizen-track")}
+        >
+          Track SOS
+        </button>
+
+        <section className="public-completed-cases" aria-labelledby="public-cases-title">
+          <h2 id="public-cases-title">Recently resolved emergencies</h2>
+          <p>Only resolved cases are shown. Personal details and precise locations are never published here.</p>
+          {publicCases.length ? <div className="public-case-grid">{publicCases.map((item, index) => <article className="public-case-card" key={`${item.reported_at || item.disaster_type}-${index}`}><p><strong>Location:</strong> {item.city && item.state ? `${item.city}, ${item.state}` : item.city || item.state || "Location unavailable"}</p><p><strong>Reported:</strong> {item.reported_at ? new Date(item.reported_at).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" }) : "Date not available"}</p><p><strong>Type:</strong> {item.disaster_type}</p><p>{item.description}</p><span>{item.status}</span>{item.location_attribution && <small>{item.location_attribution}</small>}</article>)}</div> : <p>No resolved cases to display yet.</p>}
+        </section>
 
         {message && (
           <div className="selection-message" role="status">

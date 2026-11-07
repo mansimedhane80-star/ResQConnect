@@ -1,12 +1,15 @@
 from urllib.error import URLError
 
-from weather_data import get_weather_data
-from flood_data import get_flood_data, analyze_discharge_trend
-from landslide_data import get_landslide_factors, analyze_landslide_signal
-from earthquake_data import (
-    get_earthquake_data,
-    calculate_distance
-)
+try:
+    from .weather_data import get_weather_data
+    from .flood_data import get_flood_data, analyze_discharge_trend
+    from .landslide_data import get_landslide_factors, analyze_landslide_signal
+    from .earthquake_data import get_earthquake_data, calculate_distance
+except ImportError:  # Support running this module directly for local review.
+    from weather_data import get_weather_data
+    from flood_data import get_flood_data, analyze_discharge_trend
+    from landslide_data import get_landslide_factors, analyze_landslide_signal
+    from earthquake_data import get_earthquake_data, calculate_distance
 
 
 # --------------------------------------------------

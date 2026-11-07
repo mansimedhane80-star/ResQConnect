@@ -9,6 +9,7 @@ from app.database import get_db
 from app.models import User, Responder, SOSCase, CaseAssignment
 from app.schemas import ResponderCreate
 from app.auth import hash_password, require_admin, get_current_user
+from app.geocoding import get_cached_address
 
 router = APIRouter(prefix="/responders", tags=["Responders"])
 
@@ -238,6 +239,7 @@ def get_my_assignments(
             "contact_number": case.contact_number,
             "latitude": case.latitude,
             "longitude": case.longitude,
+            "location_address": get_cached_address(db, case.latitude, case.longitude),
             "disaster_type": case.disaster_type,
             "urgency": case.urgency,
             "priority_score": case.priority_score,
@@ -398,7 +400,7 @@ def complete_assignment(
             )
 
         assignment.completed_at = func.current_timestamp()
-        case.case_status = "completed"
+        case.case_status = "resolved"
 
         # Make responder available if they have no other active assignments
         other_active_assignment = db.query(CaseAssignment).filter(

@@ -1,12 +1,62 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   MapPin, ShieldAlert, ArrowRight, Check, Users,
   HeartPulse, Utensils, House, Route, LocateFixed, Upload,
   UserRound, AlertTriangle
 } from "lucide-react";
 import "./CitizenSOS.css";
+import { API_BASE } from "../api";
 
-const API_URL = "http://127.0.0.1:8000/api/sos/";
+const API_URL = `${API_BASE}/sos/`;
+const TRACKING_STORAGE_KEY = "resqLatestTracking";
+
+function readSavedTracking(initialTracking) {
+  if (!initialTracking) return null;
+  const tokenFromLink = window.location.hash.slice(1);
+  if (tokenFromLink) {
+    try {
+      const saved = JSON.parse(localStorage.getItem(TRACKING_STORAGE_KEY) || "null");
+      return { case_id: saved?.case_id || null, tracking_token: tokenFromLink };
+    } catch {
+      return { case_id: null, tracking_token: tokenFromLink };
+    }
+  }
+  try {
+    return JSON.parse(localStorage.getItem(TRACKING_STORAGE_KEY) || "null");
+  } catch {
+    return null;
+  }
+}
+
+const trackingSteps = [
+  "SOS received",
+  "Awaiting responder assignment",
+  "Responder assigned",
+  "Assistance in progress",
+  "Case resolved or closed",
+];
+
+function getTrackingStep(caseData) {
+  if (!caseData) return 0;
+  if (["rejected", "duplicate"].includes(caseData.verification_status)) return -1;
+  const status = String(caseData.case_status || "new").toLowerCase();
+  if (["resolved", "closed"].includes(status) || caseData.assignment?.status === "completed") return 4;
+  if (["in_progress", "accepted"].includes(status) || caseData.assignment?.status === "accepted") return 3;
+  if (status === "assigned" || caseData.assignment?.status === "assigned") return 2;
+  return 1;
+}
+
+function friendlyCaseStatus(caseData) {
+  if (!caseData) return "Checking the latest case status…";
+  if (caseData.verification_status === "rejected") return "Report was rejected";
+  if (caseData.verification_status === "duplicate") return "Report marked as duplicate";
+  const status = String(caseData.case_status || "new").toLowerCase();
+  if (status === "closed") return "Case closed";
+  if (status === "resolved") return "Case resolved";
+  if (["in_progress", "accepted"].includes(status)) return "Assistance in progress";
+  if (status === "assigned") return "Responder assigned";
+  return "Awaiting responder assignment";
+}
 
 const languages = [
   ["en", "English"], ["hi", "हिन्दी"], ["mr", "मराठी"],
@@ -275,11 +325,13 @@ const helpOptions = [
   { id:"road", icon:Route }
 ];
 
-export default function CitizenSOS({ language = "en", setLanguage }) {
+export default function CitizenSOS({ language = "en", setLanguage, initialTracking = false, onNewReport }) {
   const [step, setStep] = useState(1);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [location, setLocation] = useState(null);
+  const [manualLatitude, setManualLatitude] = useState("");
+  const [manualLongitude, setManualLongitude] = useState("");
   const [locationMessage, setLocationMessage] = useState("");
   const [gettingLocation, setGettingLocation] = useState(false);
   const [disaster, setDisaster] = useState("");
@@ -288,12 +340,106 @@ export default function CitizenSOS({ language = "en", setLanguage }) {
   const [needs, setNeeds] = useState([]);
   const [specialNeeds, setSpecialNeeds] = useState("");
   const [image, setImage] = useState(null);
-  const [submitted, setSubmitted] = useState(false);
+  const [tracking, setTracking] = useState(() => readSavedTracking(initialTracking));
+  const [trackingData, setTrackingData] = useState(null);
+  const [trackingError, setTrackingError] = useState("");
+  const [trackingLoading, setTrackingLoading] = useState(false);
+  const [trackingCopied, setTrackingCopied] = useState(false);
+  const [trackingCodeCopied, setTrackingCodeCopied] = useState(false);
+  const [trackingInput, setTrackingInput] = useState("");
+  const [submitted, setSubmitted] = useState(() => Boolean(initialTracking));
   const [incidentId, setIncidentId] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
 
   const t = translations[language] || translations.en;
+
+  const refreshTracking = useCallback(async () => {
+    if (!tracking?.tracking_token) return;
+    setTrackingLoading(true);
+    try {
+      const response = await fetch(`${API_BASE}/cases/track`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tracking_token: tracking.tracking_token }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || "Unable to refresh case status.");
+      setTrackingData(data);
+      try {
+        localStorage.setItem(TRACKING_STORAGE_KEY, JSON.stringify({ case_id: data.case_id, tracking_token: tracking.tracking_token }));
+      } catch {
+        // Tracking remains available for this page session if storage is blocked.
+      }
+      setTrackingError("");
+    } catch (error) {
+      setTrackingError(error.message || "Network unavailable. Your tracking reference is saved; try again shortly.");
+    } finally {
+      setTrackingLoading(false);
+    }
+  }, [tracking]);
+
+  useEffect(() => {
+    if (!submitted || !tracking?.tracking_token || (trackingError && !trackingData) || getTrackingStep(trackingData) === 4 || getTrackingStep(trackingData) === -1) return undefined;
+    refreshTracking();
+    const interval = window.setInterval(refreshTracking, 15000);
+    return () => window.clearInterval(interval);
+  }, [submitted, tracking, trackingData?.case_status, trackingData?.verification_status, trackingError, refreshTracking]);
+
+  function submitTrackingCode(event) {
+    event.preventDefault();
+    const code = trackingInput.trim();
+    const compact = code.replace(/[\s-]/g, "");
+    const isHumanCode = /^RSC[A-HJ-NP-Z2-9]{20}$/i.test(compact);
+    const isLegacyToken = /^[A-Za-z0-9_-]{40,100}$/.test(code);
+    if (!isHumanCode && !isLegacyToken) {
+      setTrackingError("Enter the complete secure tracking code or original tracking token from your SOS confirmation.");
+      return;
+    }
+    setTrackingError("");
+    setTrackingData(null);
+    setTracking({ tracking_token: code });
+    setSubmitted(true);
+  }
+
+  function trackAnotherSOS() {
+    setTracking(null);
+    setTrackingData(null);
+    setTrackingError("");
+    setTrackingInput("");
+    setSubmitted(true);
+  }
+
+  async function copyTrackingLink() {
+    if (!tracking?.tracking_token) return;
+    const link = new URL(getSecureTrackingLink());
+    try {
+      await navigator.clipboard.writeText(link.toString());
+      setTrackingCopied(true);
+      window.setTimeout(() => setTrackingCopied(false), 2500);
+    } catch {
+      setTrackingError("Copy was unavailable. This browser still has the saved tracking reference.");
+    }
+  }
+
+  async function copyTrackingCode() {
+    if (!tracking?.tracking_token) return;
+    try {
+      await navigator.clipboard.writeText(tracking.tracking_token);
+      setTrackingCodeCopied(true);
+      window.setTimeout(() => setTrackingCodeCopied(false), 2500);
+    } catch {
+      setTrackingError("Copy was unavailable. Select the tracking code and copy it manually.");
+    }
+  }
+
+  function getSecureTrackingLink() {
+    if (!tracking?.tracking_token) return "";
+    const link = new URL(window.location.href);
+    link.searchParams.set("page", "citizen-track");
+    link.hash = tracking.tracking_token;
+    return link.toString();
+  }
 
   // Handle browser Back and Forward for SOS form steps.
   useEffect(() => {
@@ -327,20 +473,45 @@ export default function CitizenSOS({ language = "en", setLanguage }) {
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
+        const { latitude, longitude, accuracy } = position.coords;
+        if (!Number.isFinite(latitude) || !Number.isFinite(longitude) ||
+            latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+          setLocationMessage("The browser returned invalid coordinates. Enter your location manually.");
+          setGettingLocation(false);
+          return;
+        }
         setLocation({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-          accuracy: position.coords.accuracy
+          latitude,
+          longitude,
+          accuracy
         });
         setLocationMessage(t.locationDetected);
         setGettingLocation(false);
       },
-      () => {
-        setLocationMessage(t.locationDenied);
+      (error) => {
+        const message = error.code === error.PERMISSION_DENIED
+          ? t.locationDenied
+          : error.code === error.TIMEOUT
+            ? "Location lookup timed out. Try again or enter coordinates manually."
+            : t.locationDenied;
+        setLocationMessage(message);
         setGettingLocation(false);
       },
       { enableHighAccuracy:true, timeout:15000, maximumAge:0 }
     );
+  }
+
+  function useManualLocation() {
+    const latitude = Number(manualLatitude);
+    const longitude = Number(manualLongitude);
+    if (!manualLatitude.trim() || !manualLongitude.trim() ||
+        !Number.isFinite(latitude) || !Number.isFinite(longitude) ||
+        latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+      setLocationMessage("Enter a valid latitude (-90 to 90) and longitude (-180 to 180).");
+      return;
+    }
+    setLocation({ latitude, longitude, accuracy: null, source: "manual" });
+    setLocationMessage("Manual coordinates selected. Check they identify the emergency location.");
   }
 
   function toggleNeed(id) {
@@ -407,6 +578,26 @@ Special needs: ${specialNeeds.trim() || "None specified"}
       }
 
       setIncidentId(data.case_id);
+      const savedReference = {
+        case_id: data.case_id,
+        tracking_token: data.tracking_token,
+      };
+      if (!savedReference.tracking_token) throw new Error("The server did not return a secure tracking reference.");
+      try {
+        localStorage.setItem(TRACKING_STORAGE_KEY, JSON.stringify(savedReference));
+      } catch {
+        setTrackingError("Your SOS was received, but this browser could not save the tracking reference. Copy the secure tracking link before closing this page.");
+      }
+      setTracking(savedReference);
+      setTrackingData({
+        case_id: data.case_id,
+        disaster_type: data.disaster_type || disaster,
+        case_status: data.case_status || "new",
+        verification_status: data.verification_status || "pending",
+        created_at: data.created_at || null,
+        updated_at: data.created_at || null,
+        assignment: null,
+      });
       setSubmitted(true);
 
     } catch (error) {
@@ -415,6 +606,29 @@ Special needs: ${specialNeeds.trim() || "None specified"}
     } finally {
       setSubmitting(false);
     }
+  }
+
+  if (initialTracking && (!tracking?.tracking_token || (!trackingData && trackingError))) {
+    return (
+      <main className="citizen-sos-page">
+        <header className="sos-header">
+          <div className="sos-brand"><span className="sos-brand-icon"><ShieldAlert size={25} /></span><div><strong>ResQConnect</strong><span>{t.sub}</span></div></div>
+          <button type="button" className="sos-location-button" onClick={onNewReport}>Report an emergency</button>
+        </header>
+        <section className="sos-success-card sos-track-entry">
+          <p className="sos-eyebrow">PRIVATE CASE STATUS</p>
+          <h1>Track SOS</h1>
+          <p>Enter the secure tracking code you received when you submitted your report. A case number alone cannot access private case details.</p>
+          <form onSubmit={submitTrackingCode}>
+            <label htmlFor="sos-tracking-code">Secure tracking code</label>
+            <input id="sos-tracking-code" name="tracking_code" type="text" autoComplete="off" minLength={23} maxLength={100} required value={trackingInput} onChange={(event) => setTrackingInput(event.target.value)} placeholder="RSC-XXXX-XXXX-XXXX-XXXX-XXXX" />
+            <button type="submit" className="sos-primary-button" disabled={trackingLoading}>{trackingLoading ? "Checking…" : "Track SOS"}</button>
+          </form>
+          {trackingError && <p className="sos-location-message" role="alert">{trackingError}</p>}
+          <p className="sos-tracking-private">Keep your tracking code private. Contact local emergency services if you need immediate help.</p>
+        </section>
+      </main>
+    );
   }
 
   return (
@@ -452,20 +666,61 @@ Special needs: ${specialNeeds.trim() || "None specified"}
       </header>
 
       {submitted ? (
-        <section className="sos-success-card">
+        <section className="sos-success-card sos-tracking-card">
           <div className="sos-success-icon">
             <Check size={42} />
           </div>
           <p className="sos-eyebrow">RESQCONNECT • CITIZEN SOS</p>
-          <h1>{t.success}</h1>
+          <h1>{initialTracking ? "Track your emergency request" : t.success}</h1>
+          {!initialTracking && <p>Your report was received by the emergency response system.</p>}
+          {!initialTracking && tracking?.tracking_token && <div className="sos-secure-code"><span>Secure tracking code · keep this private</span><code>{tracking.tracking_token}</code><button type="button" className="sos-location-button" onClick={copyTrackingCode}>{trackingCodeCopied ? "Tracking code copied" : "Copy tracking code"}</button><p>Save this code safely or use the secure tracking link below to check your case later.</p></div>}
+          {tracking?.tracking_token && <a className="sos-secure-link" href={getSecureTrackingLink()}>Open secure Track SOS page</a>}
           <div className="sos-incident-number">
             <span>{t.reference}</span>
-            <strong>{incidentId}</strong>
+            <strong>{trackingData?.case_id || incidentId || tracking?.case_id || "—"}</strong>
           </div>
           <div className="sos-status-row">
             <span>{t.status}</span>
-            <strong>{t.statusValue}</strong>
+            <strong>{friendlyCaseStatus(trackingData)}</strong>
           </div>
+          <div className="sos-tracking-meta">
+            <p><span>Disaster type</span><strong>{trackingData?.disaster_type || disaster || "Loading…"}</strong></p>
+            <p><span>Submitted</span><strong>{trackingData?.created_at ? new Date(trackingData.created_at).toLocaleString() : "Not available yet"}</strong></p>
+            <p><span>Last updated</span><strong>{trackingData?.updated_at ? new Date(trackingData.updated_at).toLocaleString() : "Not available yet"}</strong></p>
+          </div>
+          {trackingData && <section className="sos-private-case-details"><h2>Case details</h2><p><strong>Description:</strong> {trackingData.description || "No description available."}</p><p><strong>Reported address:</strong> {trackingData.location_address?.display_name || "Readable address unavailable."}</p><p><strong>Reported coordinates:</strong> {trackingData.reported_location ? `${Number(trackingData.reported_location.latitude).toFixed(6)}, ${Number(trackingData.reported_location.longitude).toFixed(6)}` : "Unavailable"}</p><p><strong>Priority:</strong> {trackingData.urgency || "Not available"}{trackingData.priority_score != null ? ` · Score ${trackingData.priority_score}` : ""}</p><p><strong>Responder:</strong> {trackingData.assignment ? (trackingData.assignment.responder_name || "Assigned") : "Not assigned yet"}</p></section>}
+          <ol className="sos-tracking-timeline" aria-label="Emergency response progress">
+            {trackingSteps.map((label, index) => {
+              const currentStep = getTrackingStep(trackingData);
+              return <li key={label} className={index < currentStep ? "complete" : index === currentStep ? "current" : ""}>
+                <span aria-hidden="true">{index < currentStep ? "✓" : index + 1}</span>
+                <div><strong>{label}</strong>{index === 1 && currentStep === 1 && <small>Your request is awaiting operational review. No responder has been assigned yet.</small>}</div>
+              </li>;
+            })}
+          </ol>
+          {trackingData?.timeline?.length > 0 && <section className="sos-recorded-updates" aria-label="Recorded status updates"><h3>Recorded updates</h3><ul>{trackingData.timeline.map((event, index) => <li key={`${event.status}-${index}`}><strong>{String(event.status).replaceAll("_", " ")}</strong><time>{event.at ? new Date(event.at).toLocaleString() : "Time unavailable"}</time></li>)}</ul></section>}
+          {getTrackingStep(trackingData) === -1 && <p className="sos-location-message" role="status">This report needs follow-up with the emergency response team. Contact local emergency services if you need immediate assistance.</p>}
+          {trackingData?.assignment && <section className="sos-responder-summary" aria-live="polite">
+            <h2>Responder assignment</h2>
+            <p><span>Responder</span><strong>{trackingData.assignment.responder_name || "Assignment recorded"}</strong></p>
+            <p><span>Assignment status</span><strong>{trackingData.assignment.status}</strong></p>
+            <p><span>Assigned</span><strong>{trackingData.assignment.assigned_at ? new Date(trackingData.assignment.assigned_at).toLocaleString() : "—"}</strong></p>
+            {trackingData.assignment.accepted_at && <p><span>Accepted</span><strong>{new Date(trackingData.assignment.accepted_at).toLocaleString()}</strong></p>}
+            {trackingData.assignment.completed_at && <p><span>Completed</span><strong>{new Date(trackingData.assignment.completed_at).toLocaleString()}</strong></p>}
+          </section>}
+          <p className="sos-tracking-guidance">While waiting, stay somewhere safe if possible. Keep your phone available and contact local emergency services if you face immediate danger.</p>
+          {trackingError && <p className="sos-location-message" role="alert">{trackingError}</p>}
+          <div className="sos-tracking-actions">
+            <button type="button" className="sos-location-button" onClick={refreshTracking} disabled={trackingLoading}>
+              {trackingLoading ? "Refreshing…" : "Refresh status"}
+            </button>
+            <button type="button" className="sos-location-button" onClick={copyTrackingLink}>
+              {trackingCopied ? "Secure link copied" : "Copy secure tracking link"}
+            </button>
+          </div>
+          <p className="sos-tracking-private">The link contains your private tracking key. Share it only with someone you trust.</p>
+          {initialTracking && trackingData && <button type="button" className="sos-location-button sos-new-report-button" onClick={trackAnotherSOS}>Track another SOS</button>}
+          {initialTracking && <button type="button" className="sos-location-button sos-new-report-button" onClick={onNewReport}>Return to emergency reporting</button>}
         </section>
       ) : (
         <>
@@ -537,7 +792,9 @@ Special needs: ${specialNeeds.trim() || "None specified"}
                     </p>
                     {location && (
                       <small>
-                        {t.accuracy} {Math.round(location.accuracy)} {t.metres}
+                        {location.accuracy == null
+                          ? "Manually entered coordinates — accuracy not available"
+                          : `${t.accuracy} ${Math.round(location.accuracy)} ${t.metres}`}
                       </small>
                     )}
                   </div>
@@ -562,6 +819,35 @@ Special needs: ${specialNeeds.trim() || "None specified"}
                     {locationMessage}
                   </p>
                 )}
+
+                <div className="sos-manual-location">
+                  <p>Can’t use device location? Enter the emergency coordinates.</p>
+                  <div className="sos-form-grid">
+                    <label className="sos-field">
+                      Latitude
+                      <input
+                        inputMode="decimal"
+                        value={manualLatitude}
+                        onChange={(event) => setManualLatitude(event.target.value)}
+                        placeholder="e.g. 19.9975"
+                        aria-label="Emergency location latitude"
+                      />
+                    </label>
+                    <label className="sos-field">
+                      Longitude
+                      <input
+                        inputMode="decimal"
+                        value={manualLongitude}
+                        onChange={(event) => setManualLongitude(event.target.value)}
+                        placeholder="e.g. 73.7898"
+                        aria-label="Emergency location longitude"
+                      />
+                    </label>
+                  </div>
+                  <button type="button" className="sos-location-button" onClick={useManualLocation}>
+                    Use entered coordinates
+                  </button>
+                </div>
               </section>
 
               <button

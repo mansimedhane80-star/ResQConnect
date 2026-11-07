@@ -9,8 +9,9 @@ import {
   LogIn,
 } from "lucide-react";
 import "./AdminLogin.css";
+import { API_BASE } from "../api";
 
-const API_URL = "http://127.0.0.1:8000/api/auth/login";
+const API_URL = `${API_BASE}/auth/login`;
 
 export default function AdminLogin({ onRegister, onLogin }) {
   const [identifier, setIdentifier] = useState("");

@@ -25,6 +25,9 @@ import {
   ArrowUpRight,
   RefreshCw,
   Navigation,
+  FileCheck,
+  UserRound,
+  Settings,
 } from "lucide-react";
 
 import {
@@ -38,23 +41,33 @@ import {
 
 import "leaflet/dist/leaflet.css";
 import "./AdminDashboard.css";
+import { API_BASE } from "../api";
+import AdminApplications from "./AdminApplications";
 
 // --------------------------------------------------
 // CONSTANTS
 // --------------------------------------------------
 
-const API_BASE = "http://127.0.0.1:8000/api";
 const RESPONDER_RADIUS = 5000;
 const DEFAULT_CENTER = [20.012512, 73.823212];
 
 const navigation = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
+  { id: "cases", label: "Cases", icon: ClipboardList },
   { id: "map", label: "Incident Map", icon: MapPin },
   { id: "alerts", label: "Alerts", icon: Bell },
   { id: "teams", label: "Rescue Teams", icon: Users },
   { id: "ai", label: "AI Priority & Scheduling", icon: BrainCircuit },
   { id: "allotment", label: "Team Allotment", icon: ClipboardList },
+  { id: "applications", label: "Admin Applications", icon: FileCheck },
+  { id: "profile", label: "Profile", icon: UserRound },
+  { id: "settings", label: "Settings", icon: Settings },
 ];
+
+function readAdminSection() {
+  const section = new URLSearchParams(window.location.search).get("section");
+  return navigation.some((item) => item.id === section) ? section : "overview";
+}
 
 const severityRank = {
   Critical: 1,
@@ -131,6 +144,11 @@ function formatIncident(caseData, assignments = []) {
 
   const latitude = Number(caseData.latitude);
   const longitude = Number(caseData.longitude);
+  const hasCoordinates = isValidCoordinate(latitude, longitude);
+  const address = caseData.location_address || null;
+  const addressLine = address?.display_name || [address?.house_number, address?.building, address?.road,
+    address?.locality, address?.city, address?.district, address?.state, address?.postal_code]
+    .filter(Boolean).join(", ");
   const message = caseData.message || "";
 
   const peopleMatch = message.match(
@@ -143,9 +161,10 @@ function formatIncident(caseData, assignments = []) {
     title: `${caseData.disaster_type || "Emergency"} Emergency`,
     type: caseData.disaster_type || "Unknown",
 
-    location: isValidCoordinate(latitude, longitude)
-      ? `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`
-      : "Location unavailable",
+    location: addressLine || (hasCoordinates ? "Readable address unavailable" : "Location unavailable"),
+    locationAddress: addressLine || null,
+    coordinates: hasCoordinates ? `${latitude.toFixed(6)}, ${longitude.toFixed(6)}` : null,
+    mapUrl: hasCoordinates ? `https://www.openstreetmap.org/?mlat=${latitude}&mlon=${longitude}#map=18/${latitude}/${longitude}` : null,
 
     lat: latitude,
     lng: longitude,
@@ -264,7 +283,12 @@ export default function AdminDashboard({
   // STATE
   // ------------------------------------------------
 
-  const [activeSection, setActiveSection] = useState("overview");
+  const [activeSection, setActiveSection] = useState(readAdminSection);
+  const [caseFilter, setCaseFilter] = useState(() => new URLSearchParams(window.location.search).get("filter") || "all");
+  const [responderFilter, setResponderFilter] = useState(() => new URLSearchParams(window.location.search).get("section") === "teams" ? new URLSearchParams(window.location.search).get("filter") || "all" : "all");
+  const [profile, setProfile] = useState(null);
+  const [passwordForm, setPasswordForm] = useState({ current_password: "", new_password: "", confirm_password: "" });
+  const [settingsMessage, setSettingsMessage] = useState("");
 
   const [incidents, setIncidents] = useState([]);
   const [loadingIncidents, setLoadingIncidents] = useState(true);
@@ -330,6 +354,48 @@ export default function AdminDashboard({
 
     return data;
   }, []);
+
+  useEffect(() => {
+    apiRequest(`${API_BASE}/auth/me`).then(setProfile).catch(() => setProfile(null));
+  }, [apiRequest]);
+
+  useEffect(() => {
+    function restoreSectionFromHistory() {
+      const params = new URLSearchParams(window.location.search);
+      const section = params.get("section");
+      setActiveSection(navigation.some((item) => item.id === section) ? section : "overview");
+      setCaseFilter(section === "cases" ? params.get("filter") || "all" : "all");
+      setResponderFilter(section === "teams" ? params.get("filter") || "all" : "all");
+      setMobileMenuOpen(false);
+    }
+    window.addEventListener("popstate", restoreSectionFromHistory);
+    return () => window.removeEventListener("popstate", restoreSectionFromHistory);
+  }, []);
+
+  useEffect(() => {
+    if (!mobileMenuOpen) return undefined;
+    function closeOnEscape(event) {
+      if (event.key === "Escape") setMobileMenuOpen(false);
+    }
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [mobileMenuOpen]);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "auto" });
+  }, [activeSection, caseFilter, responderFilter]);
+
+  async function savePassword(event) {
+    event.preventDefault();
+    setSettingsMessage("");
+    try {
+      const result = await apiRequest(`${API_BASE}/auth/change-password`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(passwordForm),
+      });
+      setSettingsMessage(`${result.message} Please sign out and sign in again.`);
+      setPasswordForm({ current_password: "", new_password: "", confirm_password: "" });
+    } catch (error) { setSettingsMessage(error.message); }
+  }
 
   // ------------------------------------------------
   // FETCH ASSIGNMENTS
@@ -803,6 +869,8 @@ export default function AdminDashboard({
   const pendingCount = incidents.filter(
     (incident) => incident.status === "Pending"
   ).length;
+  const assignedCount = incidents.filter((incident) => incident.status === "Assigned").length;
+  const inProgressCount = incidents.filter((incident) => incident.status === "In Progress").length;
 
   // ------------------------------------------------
   // GET ASSIGNED TEAM NAME
@@ -921,8 +989,23 @@ export default function AdminDashboard({
   // NAVIGATION
   // ------------------------------------------------
 
-  function changeSection(section) {
+  function changeSection(section, filter) {
+    const url = new URL(window.location.href);
+    url.searchParams.set("page", "admin-dashboard");
+    url.searchParams.set("section", section);
+    if (["cases", "teams"].includes(section) && filter) url.searchParams.set("filter", filter);
+    else url.searchParams.delete("filter");
+    const current = new URL(window.location.href);
+    const activeFilter = section === "cases" ? caseFilter : section === "teams" ? responderFilter : null;
+    if (current.search === url.search && activeSection === section && (filter === undefined || activeFilter === filter)) {
+      setMobileMenuOpen(false);
+      window.scrollTo({ top: 0, behavior: "auto" });
+      return;
+    }
+    window.history.pushState({ page: "admin-dashboard", section }, "", url.pathname + url.search);
     setActiveSection(section);
+    if (section === "cases") setCaseFilter(filter || "all");
+    if (section === "teams") setResponderFilter(filter || "all");
     setMobileMenuOpen(false);
     setNotice("");
   }
@@ -951,9 +1034,11 @@ export default function AdminDashboard({
     label,
     value,
     color,
+    onClick,
   }) {
+    const Tag = onClick ? "button" : "div";
     return (
-      <div className="ad-summary-card">
+      <Tag className="ad-summary-card" onClick={onClick} type={onClick ? "button" : undefined}>
         <div className={`ad-summary-icon ${color}`}>
           <Icon size={21} />
         </div>
@@ -962,7 +1047,7 @@ export default function AdminDashboard({
           <span>{label}</span>
           <strong>{value}</strong>
         </div>
-      </div>
+      </Tag>
     );
   }
 
@@ -974,6 +1059,14 @@ export default function AdminDashboard({
         <p>{message}</p>
       </div>
     );
+  }
+
+  function LocationDetails({ incident }) {
+    return <div className="ad-location-details">
+      <p><MapPin size={14} /><span>{incident.locationAddress || "Readable address unavailable; use the coordinates."}</span></p>
+      <p><span>Coordinates: {incident.coordinates || "Unavailable"}</span></p>
+      {incident.mapUrl && <a href={incident.mapUrl} target="_blank" rel="noreferrer">Open location map ↗</a>}
+    </div>;
   }
 
   // --------------------------------------------------
@@ -1022,7 +1115,7 @@ export default function AdminDashboard({
             <span>{selectedIncident.title}</span>
             <span>Severity: {selectedIncident.severity}</span>
             <span>Status: {selectedIncident.status}</span>
-            <span>Location: {selectedIncident.location}</span>
+            <LocationDetails incident={selectedIncident} />
           </div>
         )}
       </section>
@@ -1592,10 +1685,9 @@ export default function AdminDashboard({
 
           <h3>{incident.title}</h3>
 
-          <p className="ad-incident-location">
-            <MapPin size={14} />
-            {incident.location}
-          </p>
+          <div className="ad-incident-location">
+            <LocationDetails incident={incident} />
+          </div>
 
           <p className="ad-incident-description">
             {incident.message}
@@ -2087,16 +2179,22 @@ export default function AdminDashboard({
         <div className="ad-summary-grid">
           <SummaryCard
             icon={Activity}
-            label="Active incidents"
-            value={activeIncidents.length}
+            label="Total cases"
+            value={incidents.length}
             color="blue"
+            onClick={() => changeSection("cases", "all")}
           />
+
+          <SummaryCard icon={Clock} label="Pending cases" value={pendingCount} color="purple" onClick={() => changeSection("cases", "Pending")} />
+          <SummaryCard icon={ClipboardList} label="Assigned cases" value={assignedCount} color="blue" onClick={() => changeSection("cases", "Assigned")} />
+          <SummaryCard icon={Activity} label="In progress" value={inProgressCount} color="green" onClick={() => changeSection("cases", "In Progress")} />
 
           <SummaryCard
             icon={AlertTriangle}
             label="Critical incidents"
             value={criticalCount}
             color="red"
+            onClick={() => changeSection("cases", "critical")}
           />
 
           <SummaryCard
@@ -2104,6 +2202,7 @@ export default function AdminDashboard({
             label="Available responders"
             value={availableTeams.length}
             color="green"
+            onClick={() => changeSection("teams", "available")}
           />
 
           <SummaryCard
@@ -2111,6 +2210,7 @@ export default function AdminDashboard({
             label="Resolved incidents"
             value={resolvedCount}
             color="purple"
+            onClick={() => changeSection("cases", "Resolved")}
           />
         </div>
 
@@ -2186,6 +2286,29 @@ export default function AdminDashboard({
         </section>
       </>
     );
+  }
+
+  function Cases() {
+    const filters = ["all", "active", "Pending", "Assigned", "In Progress", "Resolved", "critical"];
+    const visibleCases = incidents.filter((item) => {
+      if (caseFilter === "all") return true;
+      if (caseFilter === "active") return item.status !== "Resolved";
+      if (caseFilter === "critical") return item.severity === "Critical" && item.status !== "Resolved";
+      return item.status === caseFilter;
+    });
+    return <>
+      <SectionHeading eyebrow="CASE MANAGEMENT" title="Reported cases" description="Cases visible to your authorized administrator account." />
+      <div className="ad-case-filters" aria-label="Filter cases">
+        {filters.map((filter) => <button key={filter} type="button" className={caseFilter === filter ? "ad-primary-button" : "ad-text-button"} onClick={() => changeSection("cases", filter)}>{filter === "all" ? "All" : filter}</button>)}
+      </div>
+      <section className="ad-panel">
+        {visibleCases.length === 0 ? <EmptyState message="No cases match this filter." /> : visibleCases.map((item) => <article className="ad-case-row" key={item.id}>
+          <div><strong>{item.title} · {item.id}</strong><p>{item.time}</p><LocationDetails incident={item} /></div>
+          <span className={`ad-status-pill ${item.status === "Resolved" ? "resolved" : item.status === "Pending" ? "pending" : "assigned"}`}>{item.status}</span>
+          <span>{item.severity}</span>
+        </article>)}
+      </section>
+    </>;
   }
 
   // ==================================================
@@ -2265,6 +2388,7 @@ export default function AdminDashboard({
   // ==================================================
 
   function RescueTeams() {
+    const visibleResponders = responders.filter((responder) => responderFilter === "all" || getAvailability(responder) === responderFilter);
     return (
       <>
         <SectionHeading
@@ -2292,6 +2416,7 @@ export default function AdminDashboard({
             label="Total responders"
             value={responders.length}
             color="blue"
+            onClick={() => changeSection("teams", "all")}
           />
 
           <SummaryCard
@@ -2299,6 +2424,7 @@ export default function AdminDashboard({
             label="Available responders"
             value={availableTeams.length}
             color="green"
+            onClick={() => changeSection("teams", "available")}
           />
 
           <SummaryCard
@@ -2306,6 +2432,7 @@ export default function AdminDashboard({
             label="Busy responders"
             value={busyTeams.length}
             color="orange"
+            onClick={() => changeSection("teams", "busy")}
           />
         </div>
 
@@ -2322,7 +2449,7 @@ export default function AdminDashboard({
             </thead>
 
             <tbody>
-              {responders.map((responder) => (
+              {visibleResponders.map((responder) => (
                 <tr key={responder.responder_id}>
                   <td>
                     <div className="ad-team-cell">
@@ -2348,10 +2475,10 @@ export default function AdminDashboard({
                 </tr>
               ))}
 
-              {!loadingResponders && responders.length === 0 && (
+              {!loadingResponders && visibleResponders.length === 0 && (
                 <tr>
                   <td colSpan="5">
-                    No registered responders found.
+                    No responders match this view.
                   </td>
                 </tr>
               )}
@@ -2523,11 +2650,15 @@ export default function AdminDashboard({
 
   const pageTitles = {
     overview: "Overview",
+    cases: "Cases",
     map: "Incident Map",
     alerts: "Alerts",
     teams: "Rescue Teams",
     ai: "AI Priority & Scheduling",
     allotment: "Team Allotment",
+    applications: "Admin Applications",
+    profile: "Profile",
+    settings: "Settings",
   };
 
   // ==================================================
@@ -2595,7 +2726,8 @@ export default function AdminDashboard({
                 className={`ad-nav-item ${
                   activeSection === item.id ? "ad-nav-active" : ""
                 }`}
-                onClick={() => changeSection(item.id)}
+                aria-current={activeSection === item.id ? "page" : undefined}
+                onClick={() => changeSection(item.id, item.id === "cases" ? "all" : undefined)}
               >
                 <Icon size={18} />
                 <span>{item.label}</span>
@@ -2684,7 +2816,7 @@ export default function AdminDashboard({
 
           {/* LOADING */}
 
-          {loadingIncidents && (
+          {loadingIncidents && !["applications", "profile", "settings"].includes(activeSection) && (
             <div className="ad-panel">
               <p>Loading SOS cases from database...</p>
             </div>
@@ -2692,7 +2824,7 @@ export default function AdminDashboard({
 
           {/* ERROR */}
 
-          {incidentError && (
+          {incidentError && !["applications", "profile", "settings"].includes(activeSection) && (
             <div className="ad-panel" role="alert">
               <p style={{ color: "red" }}>{incidentError}</p>
 
@@ -2707,9 +2839,11 @@ export default function AdminDashboard({
 
           {/* PAGES */}
 
-          {!loadingIncidents && !incidentError && (
+          {(["applications", "profile", "settings"].includes(activeSection) || (!loadingIncidents && !incidentError)) && (
             <>
               {activeSection === "overview" && <Overview />}
+
+              {activeSection === "cases" && <Cases />}
 
               {activeSection === "map" && (
                 <>
@@ -2740,6 +2874,10 @@ export default function AdminDashboard({
               {activeSection === "ai" && <AIRecommendations />}
 
               {activeSection === "allotment" && <TeamAllotment />}
+
+              {activeSection === "applications" && <AdminApplications />}
+              {activeSection === "profile" && <><SectionHeading eyebrow="ACCOUNT" title="Profile" description="Account information currently on file." /><section className="ad-panel ad-account-panel">{profile ? <dl><dt>Name</dt><dd>{profile.name}</dd><dt>Email</dt><dd>{profile.email}</dd><dt>Role</dt><dd>Administrator</dd><dt>Phone</dt><dd>{profile.phone || "Not on file"}</dd><dt>Organization</dt><dd>{profile.organization || "Not on file"}</dd><dt>Designation</dt><dd>{profile.designation || "Not on file"}</dd></dl> : <p>Profile details are unavailable. Refresh the page or sign in again.</p>}</section></>}
+              {activeSection === "settings" && <><SectionHeading eyebrow="ACCOUNT SECURITY" title="Settings" description="Change the password for your account." /><form className="ad-panel ad-password-form" onSubmit={savePassword}><label>Current password<input type="password" autoComplete="current-password" required value={passwordForm.current_password} onChange={(e) => setPasswordForm({ ...passwordForm, current_password: e.target.value })} /></label><label>New password<input type="password" autoComplete="new-password" minLength={8} maxLength={128} required value={passwordForm.new_password} onChange={(e) => setPasswordForm({ ...passwordForm, new_password: e.target.value })} /></label><label>Confirm new password<input type="password" autoComplete="new-password" minLength={8} maxLength={128} required value={passwordForm.confirm_password} onChange={(e) => setPasswordForm({ ...passwordForm, confirm_password: e.target.value })} /></label><button className="ad-primary-button" type="submit">Update password</button>{settingsMessage && <p role="status">{settingsMessage}</p>}</form></>}
             </>
           )}
         </div>

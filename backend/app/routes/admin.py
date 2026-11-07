@@ -1,21 +1,27 @@
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from fastapi.responses import FileResponse
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 from typing import Optional
 
 from app.database import get_db
 from app.models import (
     User,
+    AdminRegistration,
     Responder,
     SOSCase,
     CaseAssignment
 )
 from app.schemas import (
     ResponderCreate,
-    CaseAssignmentCreate
+    CaseAssignmentCreate,
+    AdminRejection,
 )
 from app.auth import hash_password, require_admin
+from app.document_store import DOCUMENTS, resolve_document
+from app.notifications import notify_email
 
 from ai.sos_classifier import analyze_sos
 
@@ -24,6 +30,162 @@ router = APIRouter(
     prefix="/admin",
     tags=["Admin"]
 )
+
+
+def serialize_admin_application(application: AdminRegistration):
+    return {
+        "registration_id": application.registration_id,
+        "full_name": application.full_name,
+        "email": application.email,
+        "phone": application.phone,
+        "admin_id": application.admin_id,
+        "organization": application.organization,
+        "designation": application.designation,
+        "application_status": application.application_status,
+        "submitted_at": application.submitted_at.isoformat() if application.submitted_at else None,
+        "reviewed_at": application.reviewed_at.isoformat() if application.reviewed_at else None,
+        "rejection_reason": application.rejection_reason,
+        "documents": {
+            key: getattr(application, column) is not None
+            for key, (column, _label) in DOCUMENTS.items()
+        },
+    }
+
+
+@router.get("/registrations")
+def get_admin_registrations(
+    status_filter: str = "pending",
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    if status_filter not in {"pending", "approved", "rejected", "all"}:
+        raise HTTPException(status_code=422, detail="Invalid application status filter")
+    query = db.query(AdminRegistration)
+    if status_filter != "all":
+        query = query.filter(AdminRegistration.application_status == status_filter)
+    return [serialize_admin_application(item) for item in query.order_by(
+        AdminRegistration.submitted_at.desc()
+    ).all()]
+
+
+@router.get("/registrations/{registration_id}")
+def get_admin_registration(
+    registration_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    application = db.query(AdminRegistration).filter(
+        AdminRegistration.registration_id == registration_id
+    ).first()
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+    return serialize_admin_application(application)
+
+
+@router.get("/registrations/{registration_id}/documents/{document_type}")
+def download_admin_registration_document(
+    registration_id: int,
+    document_type: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    if document_type not in DOCUMENTS:
+        raise HTTPException(status_code=404, detail="Document not found")
+    application = db.query(AdminRegistration).filter(
+        AdminRegistration.registration_id == registration_id
+    ).first()
+    if not application:
+        raise HTTPException(status_code=404, detail="Document not found")
+    column_name, _label = DOCUMENTS[document_type]
+    stored_name = getattr(application, column_name)
+    if not stored_name:
+        raise HTTPException(status_code=404, detail="Document not found")
+    path = resolve_document(stored_name)
+    extension = path.suffix.lower()
+    media_type = {".pdf": "application/pdf", ".jpg": "image/jpeg", ".png": "image/png"}[extension]
+    return FileResponse(
+        path,
+        media_type=media_type,
+        filename=f"verification-document{extension}",
+        content_disposition_type="attachment",
+        headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"},
+    )
+
+
+@router.post("/registrations/{registration_id}/approve")
+def approve_admin_registration(
+    registration_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    application = db.query(AdminRegistration).filter(
+        AdminRegistration.registration_id == registration_id
+    ).with_for_update().first()
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+    if application.application_status != "pending":
+        raise HTTPException(status_code=409, detail="Application has already been reviewed")
+    if db.query(User).filter(User.email == application.email).first():
+        raise HTTPException(status_code=409, detail="An account already uses this email")
+
+    try:
+        user = User(
+            name=application.full_name,
+            email=application.email,
+            password_hash=application.password_hash,
+            role="authority",
+        )
+        db.add(user)
+        db.flush()
+        application.application_status = "approved"
+        application.reviewed_at = func.current_timestamp()
+        application.reviewer_id = current_user.user_id
+        application.rejection_reason = None
+        db.commit()
+        notify_email(db, f"admin-application:{application.registration_id}:approved", application.email,
+                     "ResQConnect administrator application approved",
+                     "Your administrator application was approved. You can now sign in to the administrator portal using the password you created.")
+        return {
+            "message": "Administrator application approved",
+            "registration_id": application.registration_id,
+            "application_status": application.application_status,
+            "user_id": user.user_id,
+        }
+    except IntegrityError as error:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="An account already uses this email") from error
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Unable to approve administrator application")
+
+
+@router.post("/registrations/{registration_id}/reject")
+def reject_admin_registration(
+    registration_id: int,
+    data: AdminRejection,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    application = db.query(AdminRegistration).filter(
+        AdminRegistration.registration_id == registration_id
+    ).with_for_update().first()
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+    if application.application_status != "pending":
+        raise HTTPException(status_code=409, detail="Application has already been reviewed")
+    application.application_status = "rejected"
+    application.reviewed_at = func.current_timestamp()
+    application.reviewer_id = current_user.user_id
+    application.rejection_reason = data.reason.strip()
+    db.commit()
+    notify_email(db, f"admin-application:{application.registration_id}:rejected", application.email,
+                 "ResQConnect administrator application update",
+                 f"Your administrator application was not approved. Reason: {data.reason.strip()}")
+    return {
+        "message": "Administrator application rejected",
+        "registration_id": application.registration_id,
+        "application_status": application.application_status,
+    }
 
 
 # --------------------------------------------------
@@ -241,7 +403,7 @@ def assign_case(
 ):
     sos_case = db.query(SOSCase).filter(
         SOSCase.case_id == data.case_id
-    ).first()
+    ).with_for_update().first()
 
     if not sos_case:
         raise HTTPException(
@@ -251,7 +413,7 @@ def assign_case(
 
     responder = db.query(Responder).filter(
         Responder.responder_id == data.responder_id
-    ).first()
+    ).with_for_update().first()
 
     if not responder:
         raise HTTPException(
@@ -295,6 +457,12 @@ def assign_case(
 
         db.commit()
         db.refresh(assignment)
+
+        assigned_user = db.query(User).filter(User.user_id == responder.user_id).first()
+        if assigned_user:
+            notify_email(db, f"assignment:{assignment.assignment_id}:assigned", assigned_user.email,
+                         f"ResQConnect case #{data.case_id} assigned",
+                         f"Case #{data.case_id} ({sos_case.disaster_type or 'emergency'}) has been assigned to you. Sign in to the responder portal to review and accept it.")
 
         return {
             "message": "Case assigned successfully",

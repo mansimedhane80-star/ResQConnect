@@ -27,6 +27,27 @@ CREATE TABLE users (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Administrator applications stay separate from authorized user accounts.
+CREATE TABLE admin_registrations (
+    registration_id SERIAL PRIMARY KEY,
+    full_name VARCHAR(100) NOT NULL,
+    email VARCHAR(150) NOT NULL UNIQUE,
+    phone VARCHAR(20) NOT NULL,
+    admin_id VARCHAR(80) NOT NULL UNIQUE,
+    organization VARCHAR(160) NOT NULL,
+    designation VARCHAR(120) NOT NULL,
+    password_hash TEXT NOT NULL,
+    government_id_ref VARCHAR(80) NOT NULL,
+    authorization_letter_ref VARCHAR(80) NOT NULL,
+    organization_id_ref VARCHAR(80),
+    application_status VARCHAR(20) NOT NULL DEFAULT 'pending'
+        CHECK (application_status IN ('pending', 'approved', 'rejected')),
+    submitted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    reviewed_at TIMESTAMP,
+    reviewer_id INTEGER REFERENCES users(user_id),
+    rejection_reason TEXT
+);
+
 
 -- ============================================================
 -- 2. SOS CASES
@@ -61,6 +82,10 @@ CREATE TABLE sos_cases (
     severity VARCHAR(20),
 
     priority_score INTEGER,
+
+    vulnerability JSONB NOT NULL DEFAULT '[]'::jsonb,
+
+    tracking_token_hash CHAR(64) UNIQUE,
 
     verification_status VARCHAR(20)
         DEFAULT 'pending'
@@ -309,6 +334,31 @@ USING GIST (location);
 CREATE INDEX idx_road_updates_location
 ON road_updates
 USING GIST (location);
+
+CREATE TABLE IF NOT EXISTS notification_logs (
+    notification_id SERIAL PRIMARY KEY,
+    event_key VARCHAR(180) NOT NULL UNIQUE,
+    channel VARCHAR(16) NOT NULL CHECK (channel IN ('email', 'sms')),
+    outcome VARCHAR(24) NOT NULL DEFAULT 'sending',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS ix_notification_logs_event_key ON notification_logs(event_key);
+
+CREATE TABLE IF NOT EXISTS geocode_cache (
+    cache_key VARCHAR(64) PRIMARY KEY,
+    address JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS tracking_attempts (
+    client_key_hash VARCHAR(64) PRIMARY KEY,
+    window_started_at TIMESTAMP NOT NULL,
+    attempt_count INTEGER NOT NULL DEFAULT 1,
+    blocked_until TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS ix_tracking_attempts_updated_at ON tracking_attempts(updated_at);
 
 
 -- ============================================================

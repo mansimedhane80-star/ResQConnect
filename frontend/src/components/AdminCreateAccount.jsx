@@ -15,6 +15,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import "./AdminCreateAccount.css";
+import { API_BASE } from "../api";
 
 const fields = [
   { name: "fullName", label: "Full Name", placeholder: "Enter your full name", Icon: UserRound, type: "text" },
@@ -52,6 +53,9 @@ export default function AdminCreateAccount({ onSignIn }) {
   });
 
   const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [submittedId, setSubmittedId] = useState(null);
+  const [applicationStatus, setApplicationStatus] = useState("");
 
   const updateField = (event) => {
     setForm({ ...form, [event.target.name]: event.target.value });
@@ -62,7 +66,7 @@ export default function AdminCreateAccount({ onSignIn }) {
     setFiles({ ...files, [name]: selectedFiles[0] || null });
   };
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
 
     if (form.password !== form.confirmPassword) {
@@ -70,8 +74,14 @@ export default function AdminCreateAccount({ onSignIn }) {
       return;
     }
 
-    if (form.password.length < 8) {
-      setMessage("Password must contain at least 8 characters.");
+    if (form.password.length < 12 ||
+        !/[a-z]/.test(form.password) || !/[A-Z]/.test(form.password) ||
+        !/\d/.test(form.password) || !/[^A-Za-z0-9]/.test(form.password)) {
+      setMessage("Use at least 12 characters with uppercase, lowercase, a number, and a symbol.");
+      return;
+    }
+    if (new TextEncoder().encode(form.password).length > 72) {
+      setMessage("Password must not exceed 72 UTF-8 bytes.");
       return;
     }
 
@@ -80,9 +90,44 @@ export default function AdminCreateAccount({ onSignIn }) {
       return;
     }
 
-    setMessage(
-      "Form validated. Connect the backend to submit your registration for verification."
-    );
+    const payload = new FormData();
+    payload.append("full_name", form.fullName.trim());
+    payload.append("email", form.email.trim());
+    payload.append("phone", form.phone.trim());
+    payload.append("admin_id", form.adminId.trim());
+    payload.append("organization", form.organization.trim());
+    payload.append("designation", form.designation.trim());
+    payload.append("password", form.password);
+    payload.append("confirm_password", form.confirmPassword);
+    payload.append("government_id", files.governmentId);
+    payload.append("authorization_letter", files.authorizationLetter);
+    if (files.organizationId) payload.append("organization_id", files.organizationId);
+
+    try {
+      setLoading(true);
+      setMessage("");
+      const response = await fetch(`${API_BASE}/auth/register-admin`, {
+        method: "POST",
+        body: payload,
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const detail = Array.isArray(data.detail)
+          ? data.detail.map((item) => item.msg).join("; ")
+          : data.detail;
+        throw new Error(detail || "Unable to submit administrator application.");
+      }
+      if (!data.registration_id || !data.application_status) {
+        throw new Error("The server did not confirm the application reference and status.");
+      }
+      setSubmittedId(data.registration_id);
+      setApplicationStatus(data.application_status);
+      setMessage(data.message || "Application submitted for review.");
+    } catch (error) {
+      setMessage(error.message || "Unable to connect to the server.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -103,7 +148,17 @@ export default function AdminCreateAccount({ onSignIn }) {
           <p>Register to manage emergency operations.</p>
         </div>
 
-        <form onSubmit={handleSubmit}>
+        {submittedId ? (
+          <section className="admin-application-confirmation" aria-live="polite">
+            <h3>Application received</h3>
+            <p>{message}</p>
+            <dl>
+              <div><dt>Application reference</dt><dd>{submittedId}</dd></div>
+              <div><dt>Status</dt><dd>{applicationStatus}</dd></div>
+            </dl>
+            <p>Sign-in is available after an authorized reviewer approves the application.</p>
+          </section>
+        ) : <form onSubmit={handleSubmit}>
           <div className="admin-fields">
             {fields.map(({ name, label, placeholder, Icon, type }) => (
               <div className="admin-form-group" key={name}>
@@ -129,10 +184,10 @@ export default function AdminCreateAccount({ onSignIn }) {
                         : "off"
                     }
                     required
+                    maxLength={name === "password" || name === "confirmPassword" ? 128 : undefined}
                     minLength={
-                      name === "password" || name === "confirmPassword"
-                        ? 8
-                        : undefined
+                      name === "password" || name === "confirmPassword" ? 12 :
+                      name === "fullName" || name === "adminId" || name === "organization" || name === "designation" ? 2 : undefined
                     }
                   />
                 </div>
@@ -177,6 +232,12 @@ export default function AdminCreateAccount({ onSignIn }) {
                       return;
                     }
 
+                    if (file && !/\.(pdf|jpe?g|png)$/i.test(file.name)) {
+                      setMessage("Choose a PDF, JPG, JPEG, or PNG document.");
+                      event.target.value = "";
+                      return;
+                    }
+
                     setMessage("");
                     updateFile(event);
                   }}
@@ -192,11 +253,11 @@ export default function AdminCreateAccount({ onSignIn }) {
             </p>
           )}
 
-          <button className="admin-submit-button" type="submit">
-            Submit for Verification
+          <button className="admin-submit-button" type="submit" disabled={loading}>
+            {loading ? "Submitting application..." : "Submit for Verification"}
             <ShieldCheck size={19} />
           </button>
-        </form>
+        </form>}
 
         <p className="admin-signin">
           Already have an account?{" "}

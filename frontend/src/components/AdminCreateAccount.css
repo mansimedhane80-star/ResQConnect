@@ -269,6 +269,46 @@
   box-shadow: 0 8px 18px rgba(36, 85, 125, 0.23);
 }
 
+.admin-submit-button:disabled {
+  opacity: 0.65;
+  cursor: wait;
+  transform: none;
+}
+
+.admin-application-confirmation {
+  padding: 18px;
+  border: 1px solid #c4dced;
+  border-radius: 12px;
+  background: #fff;
+  color: #294b65;
+  line-height: 1.55;
+}
+
+.admin-application-confirmation h3 {
+  margin-top: 0;
+  color: #176b45;
+}
+
+.admin-application-confirmation dl,
+.admin-application-confirmation dl > div {
+  display: grid;
+  gap: 8px;
+}
+
+.admin-application-confirmation dl > div {
+  grid-template-columns: 1fr auto;
+  border-top: 1px solid #e3edf4;
+  padding: 10px 0;
+}
+
+.admin-application-confirmation dt {
+  font-weight: 650;
+}
+
+.admin-application-confirmation dd {
+  margin: 0;
+}
+
 .admin-signin {
   margin: 23px 0 0;
   color: #637e93;
