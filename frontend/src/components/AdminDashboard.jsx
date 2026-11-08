@@ -120,6 +120,24 @@ function getAssignmentForCase(assignments, caseId) {
   );
 }
 
+function getReadableAddress(address, readableAddress = null) {
+  if (readableAddress) return readableAddress;
+  if (!address) return "";
+  if (typeof address === "string") return address;
+
+  return address.display_name || [
+    address.house_number,
+    address.building,
+    address.road,
+    address.locality,
+    address.city,
+    address.district,
+    address.state,
+    address.postal_code,
+    address.country,
+  ].filter(Boolean).join(", ");
+}
+
 function formatIncident(caseData, assignments = []) {
   const severityMap = {
     critical: "Critical",
@@ -145,10 +163,11 @@ function formatIncident(caseData, assignments = []) {
   const latitude = Number(caseData.latitude);
   const longitude = Number(caseData.longitude);
   const hasCoordinates = isValidCoordinate(latitude, longitude);
-  const address = caseData.location_address || null;
-  const addressLine = address?.display_name || [address?.house_number, address?.building, address?.road,
-    address?.locality, address?.city, address?.district, address?.state, address?.postal_code]
-    .filter(Boolean).join(", ");
+  const address = caseData.location_address || assignment?.location_address || null;
+  const addressLine = getReadableAddress(
+    address,
+    caseData.readable_address || assignment?.readable_address
+  );
   const message = caseData.message || "";
 
   const peopleMatch = message.match(
@@ -664,6 +683,16 @@ export default function AdminDashboard({
 
             longitude: getResponderLongitude(nearby) ??
               getResponderLongitude(registered),
+
+            location_address:
+              nearby.location_address ||
+              registered?.location_address ||
+              null,
+
+            readable_address:
+              nearby.readable_address ||
+              registered?.readable_address ||
+              null,
           };
         });
 
@@ -1235,6 +1264,8 @@ export default function AdminDashboard({
           </span>
         </div>
 
+        <LocationDetails incident={incident} />
+
         <div className="ad-assignment-detail-grid">
           <div>
             <span>Assigned responder</span>
@@ -1295,6 +1326,13 @@ export default function AdminDashboard({
                   <small>
                     {" "}· Responder ID: {item.responder_id}
                   </small>
+                </span>
+
+                <span>
+                  Location: {getReadableAddress(
+                    item.location_address,
+                    item.readable_address
+                  ) || "Readable address unavailable"}
                 </span>
 
                 <span>
@@ -1613,6 +1651,13 @@ export default function AdminDashboard({
                   </div>
 
                   <p>Responder ID: {responder.responder_id}</p>
+
+                  <p>
+                    Location: {getReadableAddress(
+                      responder.location_address,
+                      responder.readable_address
+                    ) || "Readable address unavailable"}
+                  </p>
 
                   <p>
                     Distance: {getDistance(responder.distance_meters)}
@@ -2196,6 +2241,11 @@ export default function AdminDashboard({
                       <br />
                       Status: {getAvailability(responder)}
                       <br />
+                      Location: {getReadableAddress(
+                        responder.location_address,
+                        responder.readable_address
+                      ) || "Readable address unavailable"}
+                      <br />
                       Distance: {getDistance(responder.distance_meters)}
                       <br />
                       Skills: {responder.skills || "Not specified"}
@@ -2607,6 +2657,7 @@ export default function AdminDashboard({
               <tr>
                 <th>Responder</th>
                 <th>Email</th>
+                <th>Location</th>
                 <th>Skills</th>
                 <th>Equipment</th>
                 <th>Availability</th>
@@ -2627,6 +2678,12 @@ export default function AdminDashboard({
                   </td>
 
                   <td>{responder.email || "Not provided"}</td>
+                  <td>
+                    {getReadableAddress(
+                      responder.location_address,
+                      responder.readable_address
+                    ) || "Readable address unavailable"}
+                  </td>
                   <td>{responder.skills || "Not specified"}</td>
                   <td>{responder.equipment || "Not specified"}</td>
 
@@ -2642,7 +2699,7 @@ export default function AdminDashboard({
 
               {!loadingResponders && visibleResponders.length === 0 && (
                 <tr>
-                  <td colSpan="5">
+                  <td colSpan="6">
                     No responders match this view.
                   </td>
                 </tr>
@@ -2650,7 +2707,7 @@ export default function AdminDashboard({
 
               {loadingResponders && (
                 <tr>
-                  <td colSpan="5">
+                  <td colSpan="6">
                     Loading registered responders...
                   </td>
                 </tr>
@@ -2781,6 +2838,13 @@ export default function AdminDashboard({
                   <small>
                     {" "}· Responder ID: {item.responder_id}
                   </small>
+                </span>
+
+                <span>
+                  Location: {getReadableAddress(
+                    item.location_address,
+                    item.readable_address
+                  ) || "Readable address unavailable"}
                 </span>
 
                 <span>

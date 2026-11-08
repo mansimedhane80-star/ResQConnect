@@ -1,4 +1,3 @@
-
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 from sqlalchemy import func
@@ -21,6 +20,7 @@ from app.schemas import (
 from app.auth import hash_password, require_admin
 from app.document_store import DOCUMENTS, resolve_document
 from app.notifications import notify_email
+from app.geocoding import resolve_and_cache_address
 
 from ai.sos_classifier import analyze_sos
 
@@ -29,6 +29,31 @@ router = APIRouter(
     prefix="/admin",
     tags=["Admin"]
 )
+
+
+# --------------------------------------------------
+# LOCATION ADDRESS HELPER
+# --------------------------------------------------
+
+def get_location_address(db: Session, latitude, longitude):
+    if latitude is None or longitude is None:
+        return None
+
+    try:
+        return resolve_and_cache_address(
+            db,
+            latitude,
+            longitude
+        )
+    except Exception:
+        return None
+
+
+def get_readable_address(address):
+    if not address:
+        return None
+
+    return address.get("display_name")
 
 
 def serialize_admin_application(application: AdminRegistration):
@@ -326,6 +351,12 @@ def get_responders(
     result = []
 
     for responder, user in responders:
+        location_address = get_location_address(
+            db,
+            responder.latitude,
+            responder.longitude
+        )
+
         result.append({
             "responder_id": responder.responder_id,
             "user_id": user.user_id,
@@ -335,7 +366,9 @@ def get_responders(
             "equipment": responder.equipment,
             "responder_status": responder.responder_status,
             "latitude": responder.latitude,
-            "longitude": responder.longitude
+            "longitude": responder.longitude,
+            "location_address": location_address,
+            "readable_address": get_readable_address(location_address)
         })
 
     return result
@@ -376,10 +409,20 @@ def get_assignment_history(
                 else "pending"
             )
 
+        location_address = get_location_address(
+            db,
+            sos_case.latitude,
+            sos_case.longitude
+        )
+
         result.append({
             "assignment_id": assignment.assignment_id,
             "case_id": assignment.case_id,
             "case_status": sos_case.case_status,
+            "case_latitude": sos_case.latitude,
+            "case_longitude": sos_case.longitude,
+            "location_address": location_address,
+            "readable_address": get_readable_address(location_address),
             "responder_id": responder.responder_id,
             "responder_name": responder.name,
             "responder_status": responder.responder_status,
@@ -592,10 +635,6 @@ def recommend_responders(
             detail="SOS case has no valid geographic location"
         )
 
-    # --------------------------------------------------
-    # PYTHON CLASSIFICATION WITH SAVED-TYPE FALLBACK
-    # --------------------------------------------------
-
     analysis = analyze_sos(sos_case.message or "")
 
     classified_type = normalize_text(
@@ -616,128 +655,62 @@ def recommend_responders(
     vulnerabilities = analysis.get("vulnerability", []) or []
     required_help = analysis.get("required_help", []) or []
 
-    # --------------------------------------------------
-    # DISASTER-SPECIFIC SKILL REQUIREMENTS
-    # --------------------------------------------------
-
     skill_requirements = {
         "flood": [
-            "flood rescue",
-            "water rescue",
-            "swimming",
-            "rescue"
+            "flood rescue", "water rescue", "swimming", "rescue"
         ],
         "landslide": [
-            "landslide response",
-            "search",
-            "rescue",
-            "first aid"
+            "landslide response", "search", "rescue", "first aid"
         ],
         "cyclone": [
-            "cyclone response",
-            "rescue",
-            "emergency response"
+            "cyclone response", "rescue", "emergency response"
         ],
         "heatwave": [
-            "medical",
-            "first aid",
-            "heat response"
+            "medical", "first aid", "heat response"
         ],
         "heavy rainfall": [
-            "rescue",
-            "emergency response"
+            "rescue", "emergency response"
         ],
         "earthquake": [
-            "earthquake response",
-            "search",
-            "rescue",
-            "medical"
+            "earthquake response", "search", "rescue", "medical"
         ]
     }
-
-    # --------------------------------------------------
-    # DISASTER-SPECIFIC EQUIPMENT REQUIREMENTS
-    # --------------------------------------------------
 
     equipment_requirements = {
         "flood": [
-            "boat",
-            "life jacket",
-            "rope",
-            "rescue kit"
+            "boat", "life jacket", "rope", "rescue kit"
         ],
         "landslide": [
-            "rope",
-            "first aid",
-            "rescue kit"
+            "rope", "first aid", "rescue kit"
         ],
         "cyclone": [
-            "rescue kit",
-            "first aid"
+            "rescue kit", "first aid"
         ],
         "heatwave": [
-            "medical kit",
-            "first aid",
-            "water supplies"
+            "medical kit", "first aid", "water supplies"
         ],
         "heavy rainfall": [
-            "rescue kit",
-            "rope"
+            "rescue kit", "rope"
         ],
         "earthquake": [
-            "first aid",
-            "medical kit",
-            "rescue kit"
+            "first aid", "medical kit", "rescue kit"
         ]
     }
-
-    # --------------------------------------------------
-    # ADDITIONAL HELP REQUIREMENTS
-    # --------------------------------------------------
 
     help_skill_requirements = {
-        "medical": [
-            "medical",
-            "first aid"
-        ],
-        "rescue": [
-            "rescue",
-            "search"
-        ],
-        "food": [
-            "relief distribution"
-        ],
-        "water": [
-            "water distribution"
-        ],
-        "shelter": [
-            "shelter management"
-        ]
+        "medical": ["medical", "first aid"],
+        "rescue": ["rescue", "search"],
+        "food": ["relief distribution"],
+        "water": ["water distribution"],
+        "shelter": ["shelter management"]
     }
 
-    # These are physical equipment/supplies only.
-    # Ambulance is a service/resource, not responder equipment.
-    # Boats and life jackets are handled by disaster-specific
-    # requirements rather than being added to every rescue case.
     help_equipment = {
-        "medical": [
-            "medical kit"
-        ],
-        "rescue": [
-            "rescue kit",
-            "rope"
-        ],
-        "food": [
-            "food supplies"
-        ],
-        "water": [
-            "drinking water",
-            "water supplies"
-        ],
-        "shelter": [
-            "shelter supplies",
-            "tents"
-        ]
+        "medical": ["medical kit"],
+        "rescue": ["rescue kit", "rope"],
+        "food": ["food supplies"],
+        "water": ["drinking water", "water supplies"],
+        "shelter": ["shelter supplies", "tents"]
     }
 
     required_skills = list(
@@ -759,105 +732,45 @@ def recommend_responders(
             help_equipment.get(help_type, [])
         )
 
-    # Add medical requirements when the case explicitly
-    # indicates a medical vulnerability.
     medical_vulnerabilities = {
-        "injured",
-        "pregnant",
-        "mobility limited",
-        "disabled"
+        "injured", "pregnant", "mobility limited", "disabled"
     }
 
     if any(
         normalize_text(item) in medical_vulnerabilities
         for item in vulnerabilities
     ):
-        required_skills.extend([
-            "medical",
-            "first aid"
-        ])
+        required_skills.extend(["medical", "first aid"])
+        required_equipment.extend(["medical kit", "first aid"])
 
-        required_equipment.extend([
-            "medical kit",
-            "first aid"
-        ])
-
-    # Remove duplicate requirements while preserving order.
     required_skills = list(dict.fromkeys(required_skills))
     required_equipment = list(dict.fromkeys(required_equipment))
 
-    # --------------------------------------------------
-    # RESPONDER SKILL SYNONYMS
-    # --------------------------------------------------
-
     skill_aliases = {
         "medical": [
-            "doctor",
-            "nurse",
-            "medic",
-            "medical responder",
-            "paramedic"
+            "doctor", "nurse", "medic", "medical responder", "paramedic"
         ],
         "first aid": [
-            "first-aid",
-            "first aider",
-            "medical responder",
-            "medical"
+            "first-aid", "first aider", "medical responder", "medical"
         ],
         "rescue": [
-            "rescue operation",
-            "emergency rescue",
-            "flood rescue",
-            "water rescue"
+            "rescue operation", "emergency rescue", "flood rescue", "water rescue"
         ],
-        "search": [
-            "search and rescue",
-            "search-rescue"
-        ],
-        "flood rescue": [
-            "water rescue",
-            "flood response"
-        ],
-        "emergency response": [
-            "emergency responder",
-            "disaster response"
-        ]
+        "search": ["search and rescue", "search-rescue"],
+        "flood rescue": ["water rescue", "flood response"],
+        "emergency response": ["emergency responder", "disaster response"]
     }
-
-    # --------------------------------------------------
-    # RESPONDER EQUIPMENT SYNONYMS
-    # --------------------------------------------------
 
     equipment_aliases = {
         "medical kit": [
-            "first aid kit",
-            "first-aid kit",
-            "medical supplies"
+            "first aid kit", "first-aid kit", "medical supplies"
         ],
-        "first aid": [
-            "first aid kit",
-            "first-aid kit"
-        ],
-        "rescue kit": [
-            "rescue equipment",
-            "emergency kit"
-        ],
-        "life jacket": [
-            "life vest",
-            "lifejacket"
-        ],
-        "boat": [
-            "rescue boat",
-            "inflatable boat"
-        ],
-        "rope": [
-            "rescue rope"
-        ]
+        "first aid": ["first aid kit", "first-aid kit"],
+        "rescue kit": ["rescue equipment", "emergency kit"],
+        "life jacket": ["life vest", "lifejacket"],
+        "boat": ["rescue boat", "inflatable boat"],
+        "rope": ["rescue rope"]
     }
-
-    # --------------------------------------------------
-    # COUNT ACTIVE ASSIGNMENTS
-    # --------------------------------------------------
 
     active_assignment_counts = dict(
         db.query(
@@ -868,10 +781,6 @@ def recommend_responders(
         .group_by(CaseAssignment.responder_id)
         .all()
     )
-
-    # --------------------------------------------------
-    # GET RESPONDERS WITH VALID GEOGRAPHIC LOCATIONS
-    # --------------------------------------------------
 
     responder_rows = db.query(
         Responder,
@@ -903,13 +812,9 @@ def recommend_responders(
             0
         )
 
-        # Factor 1: Distance (maximum 30).
         distance_score = get_distance_score(distance)
-
-        # Factor 2: Availability (maximum 25).
         availability_score = 25 if is_available else 0
 
-        # Factor 3: Skills (maximum 20).
         matched_skills = find_matches(
             responder.skills,
             required_skills,
@@ -923,7 +828,6 @@ def recommend_responders(
         else:
             skills_score = 0
 
-        # Factor 4: Equipment (maximum 15).
         matched_equipment = find_matches(
             responder.equipment,
             required_equipment,
@@ -937,7 +841,6 @@ def recommend_responders(
         else:
             equipment_score = 0
 
-        # Factor 5: Workload (maximum 10).
         if active_assignments == 0:
             workload_score = 10
         elif active_assignments == 1:
@@ -973,7 +876,6 @@ def recommend_responders(
             }
         })
 
-    # Highest score first. For equal scores, nearest responder first.
     recommendations.sort(
         key=lambda item: (
             item["score"],

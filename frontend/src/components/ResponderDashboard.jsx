@@ -100,15 +100,37 @@ function hasValidCoordinates(latitude, longitude) {
   );
 }
 
-function getAddressLabel(address) {
+// Supports both string and object address responses.
+function getAddressLabel(address, readableAddress = null) {
+  if (readableAddress) return readableAddress;
+
   if (!address) return "";
-  return address.display_name || [address.house_number, address.building, address.road,
-    address.locality, address.city, address.district, address.state, address.postal_code]
-    .filter(Boolean).join(", ");
+
+  if (typeof address === "string") {
+    return address;
+  }
+
+  return (
+    address.display_name ||
+    [
+      address.house_number,
+      address.building,
+      address.road,
+      address.locality,
+      address.city,
+      address.district,
+      address.state,
+      address.postal_code,
+      address.country,
+    ]
+      .filter(Boolean)
+      .join(", ")
+  );
 }
 
 function getMapUrl(latitude, longitude) {
   if (!hasValidCoordinates(latitude, longitude)) return null;
+
   return `https://www.openstreetmap.org/?mlat=${latitude}&mlon=${longitude}#map=18/${latitude}/${longitude}`;
 }
 
@@ -117,10 +139,17 @@ function ResponderDashboard({ onLogout }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [actionLoading, setActionLoading] = useState(null);
-  const [assignmentFilter, setAssignmentFilter] = useState(() => new URLSearchParams(window.location.search).get("filter") || "all");
+  const [assignmentFilter, setAssignmentFilter] = useState(
+    () =>
+      new URLSearchParams(window.location.search).get("filter") || "all"
+  );
   const [accountView, setAccountView] = useState("");
   const [profile, setProfile] = useState(null);
-  const [passwordForm, setPasswordForm] = useState({ current_password: "", new_password: "", confirm_password: "" });
+  const [passwordForm, setPasswordForm] = useState({
+    current_password: "",
+    new_password: "",
+    confirm_password: "",
+  });
   const [settingsMessage, setSettingsMessage] = useState("");
   const didMountFilterScroll = useRef(false);
 
@@ -140,25 +169,21 @@ function ResponderDashboard({ onLogout }) {
     if (!token) return;
 
     try {
-      const response = await fetch(
-        `${API_BASE}/responders/me`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const response = await fetch(`${API_BASE}/responders/me`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
       const data = await response.json();
 
       if (!response.ok) {
         throw new Error(data.detail || "Unable to fetch responder profile.");
       }
+
       setProfile(data);
 
-      if (
-        hasValidCoordinates(data.latitude, data.longitude)
-      ) {
+      if (hasValidCoordinates(data.latitude, data.longitude)) {
         setSavedLocation({
           latitude: Number(data.latitude),
           longitude: Number(data.longitude),
@@ -174,17 +199,35 @@ function ResponderDashboard({ onLogout }) {
   const savePassword = async (event) => {
     event.preventDefault();
     setSettingsMessage("");
+
     try {
       const response = await fetch(`${API_BASE}/auth/change-password`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify(passwordForm),
       });
+
       const data = await response.json();
-      if (!response.ok) throw new Error(data.detail || "Unable to change password.");
-      setSettingsMessage(`${data.message} Please sign out and sign in again.`);
-      setPasswordForm({ current_password: "", new_password: "", confirm_password: "" });
-    } catch (err) { setSettingsMessage(err.message); }
+
+      if (!response.ok) {
+        throw new Error(data.detail || "Unable to change password.");
+      }
+
+      setSettingsMessage(
+        `${data.message} Please sign out and sign in again.`
+      );
+
+      setPasswordForm({
+        current_password: "",
+        new_password: "",
+        confirm_password: "",
+      });
+    } catch (err) {
+      setSettingsMessage(err.message);
+    }
   };
 
   // ------------------------------------------
@@ -239,9 +282,16 @@ function ResponderDashboard({ onLogout }) {
   useEffect(() => {
     function restoreFilterFromHistory() {
       const params = new URLSearchParams(window.location.search);
-      setAssignmentFilter(params.get("section") === "assignments" ? params.get("filter") || "all" : "all");
+
+      setAssignmentFilter(
+        params.get("section") === "assignments"
+          ? params.get("filter") || "all"
+          : "all"
+      );
     }
+
     window.addEventListener("popstate", restoreFilterFromHistory);
+
     return () => window.removeEventListener("popstate", restoreFilterFromHistory);
   }, []);
 
@@ -250,19 +300,36 @@ function ResponderDashboard({ onLogout }) {
       didMountFilterScroll.current = true;
       return;
     }
-    document.getElementById("rd-incidents-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+
+    document
+      .getElementById("rd-incidents-section")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [assignmentFilter]);
 
   function selectAssignmentFilter(filter) {
     const url = new URL(window.location.href);
+
     url.searchParams.set("page", "responder-dashboard");
     url.searchParams.set("section", "assignments");
     url.searchParams.set("filter", filter);
-    if (url.search === window.location.search && assignmentFilter === filter) {
-      document.getElementById("rd-incidents-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+
+    if (
+      url.search === window.location.search &&
+      assignmentFilter === filter
+    ) {
+      document
+        .getElementById("rd-incidents-section")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+
       return;
     }
-    window.history.pushState({ page: "responder-dashboard", section: "assignments", filter }, "", url.pathname + url.search);
+
+    window.history.pushState(
+      { page: "responder-dashboard", section: "assignments", filter },
+      "",
+      url.pathname + url.search
+    );
+
     setAssignmentFilter(filter);
   }
 
@@ -452,29 +519,38 @@ function ResponderDashboard({ onLogout }) {
     );
   });
 
-  const criticalAssignments = sortedIncidents.filter((item) => item.assignment_status !== "completed" && getSeverity(item) === "Critical");
-  const shownAssignments = sortedIncidents.filter((item) => assignmentFilter === "all" || (assignmentFilter === "critical" ? item.assignment_status !== "completed" && getSeverity(item) === "Critical" : item.assignment_status === assignmentFilter));
+  const criticalAssignments = sortedIncidents.filter(
+    (item) =>
+      item.assignment_status !== "completed" &&
+      getSeverity(item) === "Critical"
+  );
+
+  const shownAssignments = sortedIncidents.filter(
+    (item) =>
+      assignmentFilter === "all" ||
+      (assignmentFilter === "critical"
+        ? item.assignment_status !== "completed" &&
+          getSeverity(item) === "Critical"
+        : item.assignment_status === assignmentFilter)
+  );
 
   // ------------------------------------------
   // VALID INCIDENT LOCATIONS
   // ------------------------------------------
 
-  const mappedIncidents = shownAssignments.filter(
-    (incident) =>
-      hasValidCoordinates(
-        incident.latitude,
-        incident.longitude
-      )
+  const mappedIncidents = shownAssignments.filter((incident) =>
+    hasValidCoordinates(incident.latitude, incident.longitude)
   );
 
-  const mapCenter = mappedIncidents.length > 0
-    ? [
-        Number(mappedIncidents[0].latitude),
-        Number(mappedIncidents[0].longitude),
-      ]
-    : savedLocation
-      ? [savedLocation.latitude, savedLocation.longitude]
-      : [19.9975, 73.7898];
+  const mapCenter =
+    mappedIncidents.length > 0
+      ? [
+          Number(mappedIncidents[0].latitude),
+          Number(mappedIncidents[0].longitude),
+        ]
+      : savedLocation
+        ? [savedLocation.latitude, savedLocation.longitude]
+        : [19.9975, 73.7898];
 
   // ------------------------------------------
   // DASHBOARD UI
@@ -482,7 +558,6 @@ function ResponderDashboard({ onLogout }) {
 
   return (
     <main className="responder-dashboard">
-
       {/* HEADER */}
 
       <header className="rd-topbar">
@@ -503,8 +578,27 @@ function ResponderDashboard({ onLogout }) {
             Operations Active
           </span>
 
-          <button type="button" className="rd-account-button" onClick={() => setAccountView(accountView === "profile" ? "" : "profile")}><UserRound size={16} />Profile</button>
-          <button type="button" className="rd-account-button" onClick={() => setAccountView(accountView === "settings" ? "" : "settings")}><Settings size={16} />Settings</button>
+          <button
+            type="button"
+            className="rd-account-button"
+            onClick={() =>
+              setAccountView(accountView === "profile" ? "" : "profile")
+            }
+          >
+            <UserRound size={16} />
+            Profile
+          </button>
+
+          <button
+            type="button"
+            className="rd-account-button"
+            onClick={() =>
+              setAccountView(accountView === "settings" ? "" : "settings")
+            }
+          >
+            <Settings size={16} />
+            Settings
+          </button>
 
           <button
             className="rd-logout-button"
@@ -530,7 +624,12 @@ function ResponderDashboard({ onLogout }) {
           </p>
         </div>
 
-        <button type="button" className="rd-priority-summary" onClick={() => selectAssignmentFilter("critical")} aria-label={`Show ${criticalAssignments.length} critical emergencies`}>
+        <button
+          type="button"
+          className="rd-priority-summary"
+          onClick={() => selectAssignmentFilter("critical")}
+          aria-label={`Show ${criticalAssignments.length} critical emergencies`}
+        >
           <div className="rd-summary-icon">
             <AlertTriangle size={21} />
           </div>
@@ -542,19 +641,143 @@ function ResponderDashboard({ onLogout }) {
         </button>
       </section>
 
-      {accountView === "profile" && <section className="rd-profile-panel"><h3>My Profile</h3>{profile ? <dl><dt>Name</dt><dd>{profile.name}</dd><dt>Email</dt><dd>{profile.email}</dd><dt>Role</dt><dd>Responder</dd><dt>Phone</dt><dd>{profile.phone || "Not on file"}</dd><dt>Skills</dt><dd>{profile.skills || "Not on file"}</dd><dt>Equipment</dt><dd>{profile.equipment || "Not on file"}</dd></dl> : <p>Profile details are unavailable.</p>}</section>}
-      {accountView === "settings" && <form className="rd-profile-panel rd-password-form" onSubmit={savePassword}><h3>Settings · Change password</h3><label>Current password<input type="password" autoComplete="current-password" required value={passwordForm.current_password} onChange={(e) => setPasswordForm({ ...passwordForm, current_password: e.target.value })} /></label><label>New password<input type="password" autoComplete="new-password" minLength={8} maxLength={128} required value={passwordForm.new_password} onChange={(e) => setPasswordForm({ ...passwordForm, new_password: e.target.value })} /></label><label>Confirm new password<input type="password" autoComplete="new-password" minLength={8} maxLength={128} required value={passwordForm.confirm_password} onChange={(e) => setPasswordForm({ ...passwordForm, confirm_password: e.target.value })} /></label><button type="submit" className="rd-start-button">Update password</button>{settingsMessage && <p role="status">{settingsMessage}</p>}</form>}
+      {accountView === "profile" && (
+        <section className="rd-profile-panel">
+          <h3>My Profile</h3>
 
-      <section className="rd-status-cards" aria-label="Assignment status filters">
+          {profile ? (
+            <dl>
+              <dt>Name</dt>
+              <dd>{profile.name}</dd>
+
+              <dt>Email</dt>
+              <dd>{profile.email}</dd>
+
+              <dt>Role</dt>
+              <dd>Responder</dd>
+
+              <dt>Phone</dt>
+              <dd>{profile.phone || "Not on file"}</dd>
+
+              <dt>Skills</dt>
+              <dd>{profile.skills || "Not on file"}</dd>
+
+              <dt>Equipment</dt>
+              <dd>{profile.equipment || "Not on file"}</dd>
+            </dl>
+          ) : (
+            <p>Profile details are unavailable.</p>
+          )}
+        </section>
+      )}
+
+      {accountView === "settings" && (
+        <form
+          className="rd-profile-panel rd-password-form"
+          onSubmit={savePassword}
+        >
+          <h3>Settings · Change password</h3>
+
+          <label>
+            Current password
+            <input
+              type="password"
+              autoComplete="current-password"
+              required
+              value={passwordForm.current_password}
+              onChange={(e) =>
+                setPasswordForm({
+                  ...passwordForm,
+                  current_password: e.target.value,
+                })
+              }
+            />
+          </label>
+
+          <label>
+            New password
+            <input
+              type="password"
+              autoComplete="new-password"
+              minLength={8}
+              maxLength={128}
+              required
+              value={passwordForm.new_password}
+              onChange={(e) =>
+                setPasswordForm({
+                  ...passwordForm,
+                  new_password: e.target.value,
+                })
+              }
+            />
+          </label>
+
+          <label>
+            Confirm new password
+            <input
+              type="password"
+              autoComplete="new-password"
+              minLength={8}
+              maxLength={128}
+              required
+              value={passwordForm.confirm_password}
+              onChange={(e) =>
+                setPasswordForm({
+                  ...passwordForm,
+                  confirm_password: e.target.value,
+                })
+              }
+            />
+          </label>
+
+          <button type="submit" className="rd-start-button">
+            Update password
+          </button>
+
+          {settingsMessage && (
+            <p role="status">{settingsMessage}</p>
+          )}
+        </form>
+      )}
+
+      <section
+        className="rd-status-cards"
+        aria-label="Assignment status filters"
+      >
         {[
-          ["pending", "Assigned", incidents.filter((item) => item.assignment_status === "pending").length],
-          ["accepted", "In progress", incidents.filter((item) => item.assignment_status === "accepted").length],
-          ["completed", "Completed", incidents.filter((item) => item.assignment_status === "completed").length],
+          [
+            "pending",
+            "Assigned",
+            incidents.filter((item) => item.assignment_status === "pending")
+              .length,
+          ],
+          [
+            "accepted",
+            "In progress",
+            incidents.filter((item) => item.assignment_status === "accepted")
+              .length,
+          ],
+          [
+            "completed",
+            "Completed",
+            incidents.filter((item) => item.assignment_status === "completed")
+              .length,
+          ],
           ["critical", "Critical", criticalAssignments.length],
           ["all", "All cases", incidents.length],
-        ].map(([key, label, count]) => <button key={key} type="button" className={`rd-status-card ${assignmentFilter === key ? "active" : ""}`} onClick={() => selectAssignmentFilter(key)}>
-          <span>{label}</span><strong>{count}</strong>
-        </button>)}
+        ].map(([key, label, count]) => (
+          <button
+            key={key}
+            type="button"
+            className={`rd-status-card ${
+              assignmentFilter === key ? "active" : ""
+            }`}
+            onClick={() => selectAssignmentFilter(key)}
+          >
+            <span>{label}</span>
+            <strong>{count}</strong>
+          </button>
+        ))}
       </section>
 
       {/* LOCATION SHARING */}
@@ -682,6 +905,11 @@ function ResponderDashboard({ onLogout }) {
                 const severity = getSeverity(incident);
                 const color = severityColors[severity];
 
+                const incidentAddress = getAddressLabel(
+                  incident.location_address,
+                  incident.readable_address
+                );
+
                 return (
                   <CircleMarker
                     key={incident.assignment_id}
@@ -704,15 +932,37 @@ function ResponderDashboard({ onLogout }) {
                         </strong>
 
                         <p>Case ID: {incident.case_id}</p>
-                        <p>{getAddressLabel(incident.location_address) || "Readable address unavailable"}</p>
+
+                        <p>
+                          {incidentAddress ||
+                            "Readable address unavailable"}
+                        </p>
 
                         <span>Severity: {severity}</span>
-                        {getMapUrl(incident.latitude, incident.longitude) && <p><a href={getMapUrl(incident.latitude, incident.longitude)} target="_blank" rel="noreferrer">Open map ↗</a></p>}
+
+                        {getMapUrl(
+                          incident.latitude,
+                          incident.longitude
+                        ) && (
+                          <p>
+                            <a
+                              href={getMapUrl(
+                                incident.latitude,
+                                incident.longitude
+                              )}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              Open map ↗
+                            </a>
+                          </p>
+                        )}
 
                         <br />
 
                         <span>
-                          Status: {getStatusLabel(incident.assignment_status)}
+                          Status:{" "}
+                          {getStatusLabel(incident.assignment_status)}
                         </span>
                       </div>
                     </Popup>
@@ -768,9 +1018,7 @@ function ResponderDashboard({ onLogout }) {
 
             <div className="rd-map-note">
               <Navigation size={17} />
-              <p>
-                Select a marker to view its details.
-              </p>
+              <p>Select a marker to view its details.</p>
             </div>
           </aside>
         </div>
@@ -778,7 +1026,10 @@ function ResponderDashboard({ onLogout }) {
 
       {/* ASSIGNED EMERGENCIES */}
 
-      <section className="rd-incidents-section" id="rd-incidents-section">
+      <section
+        className="rd-incidents-section"
+        id="rd-incidents-section"
+      >
         <div className="rd-section-heading">
           <div>
             <h3>
@@ -786,9 +1037,7 @@ function ResponderDashboard({ onLogout }) {
               My Assigned Emergencies
             </h3>
 
-            <p>
-              Cases assigned to your responder account
-            </p>
+            <p>Cases assigned to your responder account</p>
           </div>
 
           <span className="rd-count-badge">
@@ -797,7 +1046,6 @@ function ResponderDashboard({ onLogout }) {
         </div>
 
         <div className="rd-incident-list">
-
           {loading && (
             <div className="rd-empty-state">
               <RefreshCw size={28} />
@@ -806,137 +1054,175 @@ function ResponderDashboard({ onLogout }) {
             </div>
           )}
 
-          {!loading && !error && shownAssignments.map((incident) => {
-            const severity = getSeverity(incident);
+          {!loading &&
+            !error &&
+            shownAssignments.map((incident) => {
+              const severity = getSeverity(incident);
 
-            const status = String(
-              incident.assignment_status || ""
-            ).toLowerCase();
+              const status = String(
+                incident.assignment_status || ""
+              ).toLowerCase();
 
-            const isActionLoading =
-              actionLoading === incident.assignment_id;
+              const isActionLoading =
+                actionLoading === incident.assignment_id;
 
-            return (
-              <article
-                className={`rd-incident-card rd-${severity.toLowerCase()}`}
-                key={incident.assignment_id}
-              >
-                <div
-                  className="rd-incident-severity"
-                  style={{
-                    backgroundColor: severityColors[severity],
-                  }}
-                />
+              const incidentAddress = getAddressLabel(
+                incident.location_address,
+                incident.readable_address
+              );
 
-                <div className="rd-incident-main">
-                  <div className="rd-incident-title-row">
-                    <span className="rd-incident-id">
-                      CASE #{incident.case_id}
-                    </span>
+              return (
+                <article
+                  className={`rd-incident-card rd-${severity.toLowerCase()}`}
+                  key={incident.assignment_id}
+                >
+                  <div
+                    className="rd-incident-severity"
+                    style={{
+                      backgroundColor: severityColors[severity],
+                    }}
+                  />
 
-                    <span
-                      className="rd-severity-badge"
-                      style={{
-                        color: severityColors[severity],
-                        backgroundColor:
-                          `${severityColors[severity]}15`,
-                      }}
-                    >
-                      {severity}
-                    </span>
-                  </div>
+                  <div className="rd-incident-main">
+                    <div className="rd-incident-title-row">
+                      <span className="rd-incident-id">
+                        CASE #{incident.case_id}
+                      </span>
 
-                  <h4>
-                    {incident.disaster_type || "Emergency"}
-                  </h4>
-
-                  <p className="rd-incident-description">
-                    {incident.message}
-                  </p>
-
-                  <div className="rd-incident-location-details">
-                    <p><MapPin size={15} /><span>{getAddressLabel(incident.location_address) || "Readable address unavailable; use coordinates."}</span></p>
-                    <p><span>Coordinates: {hasValidCoordinates(incident.latitude, incident.longitude) ? `${Number(incident.latitude).toFixed(6)}, ${Number(incident.longitude).toFixed(6)}` : "Unavailable"}</span></p>
-                    {getMapUrl(incident.latitude, incident.longitude) && <a href={getMapUrl(incident.latitude, incident.longitude)} target="_blank" rel="noreferrer">Open location map ↗</a>}
-                  </div>
-
-                  <div className="rd-incident-meta">
-                    <span>
-                      <Clock size={15} />
-                      {formatDate(incident.assigned_at)}
-                    </span>
-                  </div>
-
-                  {incident.contact_number && (
-                    <div className="rd-incident-meta">
-                      <span>
-                        <Phone size={15} />
-                        Contact: {incident.contact_number}
+                      <span
+                        className="rd-severity-badge"
+                        style={{
+                          color: severityColors[severity],
+                          backgroundColor: `${severityColors[severity]}15`,
+                        }}
+                      >
+                        {severity}
                       </span>
                     </div>
-                  )}
 
-                  {incident.vulnerability?.length > 0 && (
+                    <h4>
+                      {incident.disaster_type || "Emergency"}
+                    </h4>
+
                     <p className="rd-incident-description">
-                      Vulnerability:{" "}
-                      {incident.vulnerability.join(", ")}
+                      {incident.message}
                     </p>
-                  )}
-                </div>
 
-                <div className="rd-incident-right">
-                  <span
-                    className={`rd-assigned-status rd-status-${status.replace(
-                      /\s+/g,
-                      "-"
-                    )}`}
-                  >
-                    <CheckCircle2 size={15} />
-                    {getStatusLabel(status)}
-                  </span>
+                    <div className="rd-incident-location-details">
+                      <p>
+                        <MapPin size={15} />
+                        <span>
+                          {incidentAddress ||
+                            "Readable address unavailable; use coordinates."}
+                        </span>
+                      </p>
 
-                  {status === "pending" && (
-                    <button
-                      className="rd-start-button"
-                      type="button"
-                      disabled={isActionLoading}
-                      onClick={() =>
-                        acceptAssignment(incident.assignment_id)
-                      }
+                      <p>
+                        <span>
+                          Coordinates:{" "}
+                          {hasValidCoordinates(
+                            incident.latitude,
+                            incident.longitude
+                          )
+                            ? `${Number(incident.latitude).toFixed(6)}, ${Number(incident.longitude).toFixed(6)}`
+                            : "Unavailable"}
+                        </span>
+                      </p>
+
+                      {getMapUrl(
+                        incident.latitude,
+                        incident.longitude
+                      ) && (
+                        <a
+                          href={getMapUrl(
+                            incident.latitude,
+                            incident.longitude
+                          )}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Open location map ↗
+                        </a>
+                      )}
+                    </div>
+
+                    <div className="rd-incident-meta">
+                      <span>
+                        <Clock size={15} />
+                        {formatDate(incident.assigned_at)}
+                      </span>
+                    </div>
+
+                    {incident.contact_number && (
+                      <div className="rd-incident-meta">
+                        <span>
+                          <Phone size={15} />
+                          Contact: {incident.contact_number}
+                        </span>
+                      </div>
+                    )}
+
+                    {incident.vulnerability?.length > 0 && (
+                      <p className="rd-incident-description">
+                        Vulnerability:{" "}
+                        {incident.vulnerability.join(", ")}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="rd-incident-right">
+                    <span
+                      className={`rd-assigned-status rd-status-${status.replace(
+                        /\s+/g,
+                        "-"
+                      )}`}
                     >
                       <CheckCircle2 size={15} />
-                      {isActionLoading
-                        ? "Accepting..."
-                        : "Accept Assignment"}
-                    </button>
-                  )}
-
-                  {status === "accepted" && (
-                    <button
-                      className="rd-start-button"
-                      type="button"
-                      disabled={isActionLoading}
-                      onClick={() =>
-                        completeAssignment(incident.assignment_id)
-                      }
-                    >
-                      <CheckCircle2 size={15} />
-                      {isActionLoading
-                        ? "Completing..."
-                        : "Complete Assignment"}
-                    </button>
-                  )}
-
-                  {status === "completed" && (
-                    <span className="rd-operation-started">
-                      <CheckCircle2 size={15} />
-                      Completed
+                      {getStatusLabel(status)}
                     </span>
-                  )}
-                </div>
-              </article>
-            );
-          })}
+
+                    {status === "pending" && (
+                      <button
+                        className="rd-start-button"
+                        type="button"
+                        disabled={isActionLoading}
+                        onClick={() =>
+                          acceptAssignment(incident.assignment_id)
+                        }
+                      >
+                        <CheckCircle2 size={15} />
+                        {isActionLoading
+                          ? "Accepting..."
+                          : "Accept Assignment"}
+                      </button>
+                    )}
+
+                    {status === "accepted" && (
+                      <button
+                        className="rd-start-button"
+                        type="button"
+                        disabled={isActionLoading}
+                        onClick={() =>
+                          completeAssignment(incident.assignment_id)
+                        }
+                      >
+                        <CheckCircle2 size={15} />
+                        {isActionLoading
+                          ? "Completing..."
+                          : "Complete Assignment"}
+                      </button>
+                    )}
+
+                    {status === "completed" && (
+                      <span className="rd-operation-started">
+                        <CheckCircle2 size={15} />
+                        Completed
+                      </span>
+                    )}
+                  </div>
+                </article>
+              );
+            })}
 
           {!loading && !error && incidents.length === 0 && (
             <div className="rd-empty-state">
@@ -948,8 +1234,18 @@ function ResponderDashboard({ onLogout }) {
               </p>
             </div>
           )}
-          {!loading && !error && shownAssignments.length === 0 && <div className="rd-empty-state"><h4>No cases in this view</h4><p>Assignments will appear here when they are sent to your account.</p></div>}
 
+          {!loading &&
+            !error &&
+            shownAssignments.length === 0 && (
+              <div className="rd-empty-state">
+                <h4>No cases in this view</h4>
+                <p>
+                  Assignments will appear here when they are sent to
+                  your account.
+                </p>
+              </div>
+            )}
         </div>
       </section>
 
@@ -959,7 +1255,6 @@ function ResponderDashboard({ onLogout }) {
         <span>ResQ Connect · Responder Operations</span>
         <span>Stay alert. Respond safely.</span>
       </footer>
-
     </main>
   );
 }

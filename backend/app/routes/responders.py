@@ -9,7 +9,7 @@ from app.database import get_db
 from app.models import User, Responder, SOSCase, CaseAssignment
 from app.schemas import ResponderCreate
 from app.auth import hash_password, require_admin, get_current_user
-from app.geocoding import get_cached_address
+from app.geocoding import resolve_and_cache_address
 
 router = APIRouter(prefix="/responders", tags=["Responders"])
 
@@ -232,6 +232,17 @@ def get_my_assignments(
         else:
             assignment_status = "pending"
 
+        # Resolve the readable address if it is not already cached.
+        # The result is cached for future dashboard requests.
+        location_address = None
+
+        if case.latitude is not None and case.longitude is not None:
+            location_address = resolve_and_cache_address(
+                db,
+                case.latitude,
+                case.longitude
+            )
+
         result.append({
             "assignment_id": assignment.assignment_id,
             "case_id": case.case_id,
@@ -239,7 +250,7 @@ def get_my_assignments(
             "contact_number": case.contact_number,
             "latitude": case.latitude,
             "longitude": case.longitude,
-            "location_address": get_cached_address(db, case.latitude, case.longitude),
+            "location_address": location_address,
             "disaster_type": case.disaster_type,
             "urgency": case.urgency,
             "priority_score": case.priority_score,
