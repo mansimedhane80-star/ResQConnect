@@ -4,7 +4,6 @@ from fastapi.responses import FileResponse
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
-from typing import Optional
 
 from app.database import get_db
 from app.models import (
@@ -60,12 +59,20 @@ def get_admin_registrations(
 ):
     if status_filter not in {"pending", "approved", "rejected", "all"}:
         raise HTTPException(status_code=422, detail="Invalid application status filter")
+
     query = db.query(AdminRegistration)
+
     if status_filter != "all":
-        query = query.filter(AdminRegistration.application_status == status_filter)
-    return [serialize_admin_application(item) for item in query.order_by(
-        AdminRegistration.submitted_at.desc()
-    ).all()]
+        query = query.filter(
+            AdminRegistration.application_status == status_filter
+        )
+
+    return [
+        serialize_admin_application(item)
+        for item in query.order_by(
+            AdminRegistration.submitted_at.desc()
+        ).all()
+    ]
 
 
 @router.get("/registrations/{registration_id}")
@@ -77,8 +84,10 @@ def get_admin_registration(
     application = db.query(AdminRegistration).filter(
         AdminRegistration.registration_id == registration_id
     ).first()
+
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
+
     return serialize_admin_application(application)
 
 
@@ -91,24 +100,38 @@ def download_admin_registration_document(
 ):
     if document_type not in DOCUMENTS:
         raise HTTPException(status_code=404, detail="Document not found")
+
     application = db.query(AdminRegistration).filter(
         AdminRegistration.registration_id == registration_id
     ).first()
+
     if not application:
         raise HTTPException(status_code=404, detail="Document not found")
+
     column_name, _label = DOCUMENTS[document_type]
     stored_name = getattr(application, column_name)
+
     if not stored_name:
         raise HTTPException(status_code=404, detail="Document not found")
+
     path = resolve_document(stored_name)
     extension = path.suffix.lower()
-    media_type = {".pdf": "application/pdf", ".jpg": "image/jpeg", ".png": "image/png"}[extension]
+
+    media_type = {
+        ".pdf": "application/pdf",
+        ".jpg": "image/jpeg",
+        ".png": "image/png"
+    }[extension]
+
     return FileResponse(
         path,
         media_type=media_type,
         filename=f"verification-document{extension}",
         content_disposition_type="attachment",
-        headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"},
+        headers={
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff"
+        },
     )
 
 
@@ -121,12 +144,21 @@ def approve_admin_registration(
     application = db.query(AdminRegistration).filter(
         AdminRegistration.registration_id == registration_id
     ).with_for_update().first()
+
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
+
     if application.application_status != "pending":
-        raise HTTPException(status_code=409, detail="Application has already been reviewed")
+        raise HTTPException(
+            status_code=409,
+            detail="Application has already been reviewed"
+        )
+
     if db.query(User).filter(User.email == application.email).first():
-        raise HTTPException(status_code=409, detail="An account already uses this email")
+        raise HTTPException(
+            status_code=409,
+            detail="An account already uses this email"
+        )
 
     try:
         user = User(
@@ -135,28 +167,45 @@ def approve_admin_registration(
             password_hash=application.password_hash,
             role="authority",
         )
+
         db.add(user)
         db.flush()
+
         application.application_status = "approved"
         application.reviewed_at = func.current_timestamp()
         application.reviewer_id = current_user.user_id
         application.rejection_reason = None
+
         db.commit()
-        notify_email(db, f"admin-application:{application.registration_id}:approved", application.email,
-                     "ResQConnect administrator application approved",
-                     "Your administrator application was approved. You can now sign in to the administrator portal using the password you created.")
+
+        notify_email(
+            db,
+            f"admin-application:{application.registration_id}:approved",
+            application.email,
+            "ResQConnect administrator application approved",
+            "Your administrator application was approved. You can now sign in to the administrator portal using the password you created."
+        )
+
         return {
             "message": "Administrator application approved",
             "registration_id": application.registration_id,
             "application_status": application.application_status,
             "user_id": user.user_id,
         }
+
     except IntegrityError as error:
         db.rollback()
-        raise HTTPException(status_code=409, detail="An account already uses this email") from error
+        raise HTTPException(
+            status_code=409,
+            detail="An account already uses this email"
+        ) from error
+
     except Exception:
         db.rollback()
-        raise HTTPException(status_code=500, detail="Unable to approve administrator application")
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to approve administrator application"
+        )
 
 
 @router.post("/registrations/{registration_id}/reject")
@@ -169,18 +218,31 @@ def reject_admin_registration(
     application = db.query(AdminRegistration).filter(
         AdminRegistration.registration_id == registration_id
     ).with_for_update().first()
+
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
+
     if application.application_status != "pending":
-        raise HTTPException(status_code=409, detail="Application has already been reviewed")
+        raise HTTPException(
+            status_code=409,
+            detail="Application has already been reviewed"
+        )
+
     application.application_status = "rejected"
     application.reviewed_at = func.current_timestamp()
     application.reviewer_id = current_user.user_id
     application.rejection_reason = data.reason.strip()
+
     db.commit()
-    notify_email(db, f"admin-application:{application.registration_id}:rejected", application.email,
-                 "ResQConnect administrator application update",
-                 f"Your administrator application was not approved. Reason: {data.reason.strip()}")
+
+    notify_email(
+        db,
+        f"admin-application:{application.registration_id}:rejected",
+        application.email,
+        "ResQConnect administrator application update",
+        f"Your administrator application was not approved. Reason: {data.reason.strip()}"
+    )
+
     return {
         "message": "Administrator application rejected",
         "registration_id": application.registration_id,
@@ -194,7 +256,19 @@ def reject_admin_registration(
 
 def normalize_text(value):
     """Convert text into a consistent searchable format."""
-    return (value or "").lower().replace("-", " ").replace("_", " ")
+    if value is None:
+        return ""
+
+    if isinstance(value, (list, tuple, set)):
+        value = " ".join(str(item) for item in value)
+
+    return (
+        str(value)
+        .lower()
+        .replace("-", " ")
+        .replace("_", " ")
+        .strip()
+    )
 
 
 def find_matches(text, requirements, aliases=None):
@@ -202,7 +276,7 @@ def find_matches(text, requirements, aliases=None):
     Match responder skills/equipment using phrases and synonyms.
     Returns the requirement labels that matched.
     """
-    text = normalize_text(text)
+    normalized_text = normalize_text(text)
     aliases = aliases or {}
 
     matched = []
@@ -210,7 +284,10 @@ def find_matches(text, requirements, aliases=None):
     for requirement in requirements:
         terms = [requirement] + aliases.get(requirement, [])
 
-        if any(normalize_text(term) in text for term in terms):
+        if any(
+            normalize_text(term) in normalized_text
+            for term in terms
+        ):
             matched.append(requirement)
 
     return matched
@@ -273,11 +350,6 @@ def get_assignment_history(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin)
 ):
-    """
-    Returns assignment details so the dashboard can still show
-    assigned responder names after a page refresh.
-    """
-
     rows = (
         db.query(CaseAssignment, Responder, SOSCase)
         .join(
@@ -458,11 +530,18 @@ def assign_case(
         db.commit()
         db.refresh(assignment)
 
-        assigned_user = db.query(User).filter(User.user_id == responder.user_id).first()
+        assigned_user = db.query(User).filter(
+            User.user_id == responder.user_id
+        ).first()
+
         if assigned_user:
-            notify_email(db, f"assignment:{assignment.assignment_id}:assigned", assigned_user.email,
-                         f"ResQConnect case #{data.case_id} assigned",
-                         f"Case #{data.case_id} ({sos_case.disaster_type or 'emergency'}) has been assigned to you. Sign in to the responder portal to review and accept it.")
+            notify_email(
+                db,
+                f"assignment:{assignment.assignment_id}:assigned",
+                assigned_user.email,
+                f"ResQConnect case #{data.case_id} assigned",
+                f"Case #{data.case_id} ({sos_case.disaster_type or 'emergency'}) has been assigned to you. Sign in to the responder portal to review and accept it."
+            )
 
         return {
             "message": "Case assigned successfully",
@@ -498,7 +577,6 @@ def recommend_responders(
             detail="SOS case not found"
         )
 
-    # Recommendations are only for pending cases.
     if normalize_text(sos_case.case_status) not in ("new", "pending"):
         raise HTTPException(
             status_code=409,
@@ -514,18 +592,34 @@ def recommend_responders(
             detail="SOS case has no valid geographic location"
         )
 
-    # AI analysis of the SOS message.
+    # --------------------------------------------------
+    # PYTHON CLASSIFICATION WITH SAVED-TYPE FALLBACK
+    # --------------------------------------------------
+
     analysis = analyze_sos(sos_case.message or "")
 
-    disaster_type = normalize_text(
+    classified_type = normalize_text(
         analysis.get("disaster_type", "unknown")
     )
 
-    urgency = analysis.get("urgency", "unknown")
-    vulnerabilities = analysis.get("vulnerability", [])
-    required_help = analysis.get("required_help", [])
+    saved_type = normalize_text(
+        sos_case.disaster_type or "unknown"
+    )
 
-    # Disaster-related skill requirements.
+    disaster_type = (
+        classified_type
+        if classified_type not in ("", "unknown", "none")
+        else saved_type
+    )
+
+    urgency = analysis.get("urgency", "unknown")
+    vulnerabilities = analysis.get("vulnerability", []) or []
+    required_help = analysis.get("required_help", []) or []
+
+    # --------------------------------------------------
+    # DISASTER-SPECIFIC SKILL REQUIREMENTS
+    # --------------------------------------------------
+
     skill_requirements = {
         "flood": [
             "flood rescue",
@@ -561,7 +655,10 @@ def recommend_responders(
         ]
     }
 
-    # Equipment requirements by disaster.
+    # --------------------------------------------------
+    # DISASTER-SPECIFIC EQUIPMENT REQUIREMENTS
+    # --------------------------------------------------
+
     equipment_requirements = {
         "flood": [
             "boat",
@@ -594,20 +691,53 @@ def recommend_responders(
         ]
     }
 
+    # --------------------------------------------------
+    # ADDITIONAL HELP REQUIREMENTS
+    # --------------------------------------------------
+
     help_skill_requirements = {
-        "medical": ["medical", "first aid"],
-        "rescue": ["rescue", "search"],
-        "food": ["relief distribution"],
-        "water": ["water distribution"],
-        "shelter": ["shelter management"]
+        "medical": [
+            "medical",
+            "first aid"
+        ],
+        "rescue": [
+            "rescue",
+            "search"
+        ],
+        "food": [
+            "relief distribution"
+        ],
+        "water": [
+            "water distribution"
+        ],
+        "shelter": [
+            "shelter management"
+        ]
     }
 
+    # These are physical equipment/supplies only.
+    # Ambulance is a service/resource, not responder equipment.
+    # Boats and life jackets are handled by disaster-specific
+    # requirements rather than being added to every rescue case.
     help_equipment = {
-        "medical": ["medical kit", "first aid", "ambulance"],
-        "rescue": ["rescue kit", "rope", "boat", "life jacket"],
-        "food": ["food supplies"],
-        "water": ["drinking water", "water supplies"],
-        "shelter": ["shelter supplies", "tents"]
+        "medical": [
+            "medical kit"
+        ],
+        "rescue": [
+            "rescue kit",
+            "rope"
+        ],
+        "food": [
+            "food supplies"
+        ],
+        "water": [
+            "drinking water",
+            "water supplies"
+        ],
+        "shelter": [
+            "shelter supplies",
+            "tents"
+        ]
     }
 
     required_skills = list(
@@ -629,19 +759,37 @@ def recommend_responders(
             help_equipment.get(help_type, [])
         )
 
-    # Add medical/search needs based on vulnerable people.
+    # Add medical requirements when the case explicitly
+    # indicates a medical vulnerability.
+    medical_vulnerabilities = {
+        "injured",
+        "pregnant",
+        "mobility limited",
+        "disabled"
+    }
+
     if any(
-        normalize_text(item) in ("injured", "pregnant")
+        normalize_text(item) in medical_vulnerabilities
         for item in vulnerabilities
     ):
-        required_skills.extend(["medical", "first aid"])
-        required_equipment.extend(["medical kit", "first aid"])
+        required_skills.extend([
+            "medical",
+            "first aid"
+        ])
 
-    # Remove duplicate requirements.
+        required_equipment.extend([
+            "medical kit",
+            "first aid"
+        ])
+
+    # Remove duplicate requirements while preserving order.
     required_skills = list(dict.fromkeys(required_skills))
     required_equipment = list(dict.fromkeys(required_equipment))
 
-    # Synonyms for real-world responder descriptions.
+    # --------------------------------------------------
+    # RESPONDER SKILL SYNONYMS
+    # --------------------------------------------------
+
     skill_aliases = {
         "medical": [
             "doctor",
@@ -676,6 +824,10 @@ def recommend_responders(
         ]
     }
 
+    # --------------------------------------------------
+    # RESPONDER EQUIPMENT SYNONYMS
+    # --------------------------------------------------
+
     equipment_aliases = {
         "medical kit": [
             "first aid kit",
@@ -703,7 +855,10 @@ def recommend_responders(
         ]
     }
 
-    # Count each responder's active assignments.
+    # --------------------------------------------------
+    # COUNT ACTIVE ASSIGNMENTS
+    # --------------------------------------------------
+
     active_assignment_counts = dict(
         db.query(
             CaseAssignment.responder_id,
@@ -714,7 +869,10 @@ def recommend_responders(
         .all()
     )
 
-    # Get responders with valid geographic locations.
+    # --------------------------------------------------
+    # GET RESPONDERS WITH VALID GEOGRAPHIC LOCATIONS
+    # --------------------------------------------------
+
     responder_rows = db.query(
         Responder,
         func.ST_Distance(
@@ -733,7 +891,6 @@ def recommend_responders(
 
         distance = float(distance_value)
 
-        # Only available responders can be recommended for assignment.
         is_available = (
             normalize_text(responder.responder_status) == "available"
         )
@@ -816,7 +973,7 @@ def recommend_responders(
             }
         })
 
-    # Highest total score first.
+    # Highest score first. For equal scores, nearest responder first.
     recommendations.sort(
         key=lambda item: (
             item["score"],

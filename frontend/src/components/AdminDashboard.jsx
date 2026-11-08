@@ -310,6 +310,9 @@ export default function AdminDashboard({
 
   const [recommendations, setRecommendations] = useState([]);
   const [aiAnalysis, setAiAnalysis] = useState(null);
+  const [nugenAnalysis, setNugenAnalysis] = useState(null);
+  const [loadingNugenAnalysis, setLoadingNugenAnalysis] = useState(false);
+  const [nugenAnalysisError, setNugenAnalysisError] = useState("");
 
   const [loadingRecommendations, setLoadingRecommendations] = useState(false);
   const [recommendationError, setRecommendationError] = useState("");
@@ -322,6 +325,7 @@ export default function AdminDashboard({
 
   const nearbyRequestRef = useRef(0);
   const recommendationRequestRef = useRef(0);
+  const nugenRequestRef = useRef(0);
 
   // ------------------------------------------------
   // API REQUEST
@@ -786,6 +790,70 @@ export default function AdminDashboard({
   );
 
   // ------------------------------------------------
+  // FETCH NUGEN ALIGNED MODEL ANALYSIS
+  // ------------------------------------------------
+
+  const fetchNuGenAnalysis = useCallback(
+    async (caseId = selectedNearbyCase) => {
+      const requestId = ++nugenRequestRef.current;
+      const incident = incidents.find(
+        (item) => String(item.caseId) === String(caseId)
+      );
+
+      if (!incident || incident.status !== "Pending" || !incident.message?.trim()) {
+        setNugenAnalysis(null);
+        setNugenAnalysisError(
+          incident?.message?.trim()
+            ? "NuGen analysis is available for pending SOS cases."
+            : "This SOS case does not contain a description to analyse."
+        );
+        setLoadingNugenAnalysis(false);
+        return;
+      }
+
+      try {
+        setLoadingNugenAnalysis(true);
+        setNugenAnalysisError("");
+        setNugenAnalysis(null);
+
+        // Send only the SOS description. Do not send contact details or credentials.
+        const data = await apiRequest(`${API_BASE}/ai/analyze-sos`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: incident.message }),
+        });
+
+        if (requestId !== nugenRequestRef.current) return;
+
+        let analysis = data?.analysis ?? data?.result ?? data;
+        if (typeof analysis === "string") {
+          try {
+            analysis = JSON.parse(analysis);
+          } catch {
+            analysis = { sos_summary: analysis };
+          }
+        }
+
+        if (!analysis || typeof analysis !== "object" || Array.isArray(analysis)) {
+          throw new Error("NuGen returned an unexpected analysis format.");
+        }
+
+        setNugenAnalysis(analysis);
+      } catch (error) {
+        if (requestId !== nugenRequestRef.current) return;
+        setNugenAnalysisError(
+          error.message || "NuGen analysis is temporarily unavailable."
+        );
+      } finally {
+        if (requestId === nugenRequestRef.current) {
+          setLoadingNugenAnalysis(false);
+        }
+      }
+    },
+    [apiRequest, incidents, selectedNearbyCase]
+  );
+
+  // ------------------------------------------------
   // INITIAL DATA FETCH
   // ------------------------------------------------
 
@@ -800,16 +868,20 @@ export default function AdminDashboard({
   useEffect(() => {
     nearbyRequestRef.current += 1;
     recommendationRequestRef.current += 1;
+    nugenRequestRef.current += 1;
 
     setNearbyResponders([]);
     setRecommendations([]);
     setAiAnalysis(null);
+    setNugenAnalysis(null);
+    setNugenAnalysisError("");
 
     setNearbyResponderError("");
     setRecommendationError("");
 
     setLoadingNearbyResponders(false);
     setLoadingRecommendations(false);
+    setLoadingNugenAnalysis(false);
 
     if (!selectedIncident || selectedIncident.status !== "Pending") {
       return;
@@ -817,16 +889,19 @@ export default function AdminDashboard({
 
     fetchNearbyResponders(selectedNearbyCase);
     fetchRecommendations(selectedNearbyCase);
+    fetchNuGenAnalysis(selectedNearbyCase);
 
     return () => {
       nearbyRequestRef.current += 1;
       recommendationRequestRef.current += 1;
+      nugenRequestRef.current += 1;
     };
   }, [
     selectedNearbyCase,
     selectedIncident?.status,
     fetchNearbyResponders,
     fetchRecommendations,
+    fetchNuGenAnalysis,
   ]);
 
   // ------------------------------------------------
@@ -1272,7 +1347,88 @@ export default function AdminDashboard({
   }
 
   // --------------------------------------------------
-  // AI ANALYSIS PANEL
+  // NUGEN ALIGNED MODEL ANALYSIS PANEL
+  // --------------------------------------------------
+
+  function NuGenAnalysisPanel() {
+    const displayValue = (value) => {
+      if (Array.isArray(value)) {
+        return value.length ? value.map((item) => typeof item === "string" ? item : JSON.stringify(item)).join(", ") : "None identified";
+      }
+      if (value && typeof value === "object") return JSON.stringify(value);
+      if (value === null || value === undefined || value === "") return "Not identified";
+      return String(value);
+    };
+
+    const fields = nugenAnalysis ? [
+      ["Detected language", nugenAnalysis.detected_language],
+      ["Language type", nugenAnalysis.language_type],
+      ["Likely disaster", nugenAnalysis.likely_disaster_type],
+      ["Disaster confidence", nugenAnalysis.disaster_confidence],
+      ["Reported injuries", nugenAnalysis.reported_injuries],
+      ["Urgency indicators", nugenAnalysis.urgency_indicators],
+      ["Vulnerability indicators", nugenAnalysis.vulnerability_indicators],
+      ["Suggested responder capabilities", nugenAnalysis.suggested_responder_capabilities],
+      ["Unknown information", nugenAnalysis.unknown_information],
+    ].filter(([, value]) => value !== undefined && value !== null && value !== "") : [];
+
+    return (
+      <section className="ad-panel ad-ai-analysis-panel">
+        <div className="ad-panel-heading">
+          <div>
+            <h3><BrainCircuit size={19} /> NuGen Aligned AI Analysis</h3>
+            <p>Multilingual SOS interpretation and decision-support evidence from the deployed aligned model.</p>
+          </div>
+          <button
+            className="ad-text-button"
+            onClick={() => fetchNuGenAnalysis(selectedNearbyCase)}
+            disabled={loadingNugenAnalysis || !selectedNearbyCase}
+          >
+            <RefreshCw size={14} />
+            {loadingNugenAnalysis ? "Analysing..." : "Re-analyse"}
+          </button>
+        </div>
+
+        {loadingNugenAnalysis && <p className="ad-data-note">NuGen is analysing the SOS description...</p>}
+        {nugenAnalysisError && <p className="ad-data-note" role="alert">{nugenAnalysisError}</p>}
+
+        {nugenAnalysis && (
+          <>
+            {nugenAnalysis.sos_summary && (
+              <div className="ad-ai-analysis-footer">
+                <strong>SOS summary:</strong> {displayValue(nugenAnalysis.sos_summary)}
+              </div>
+            )}
+            <div className="ad-ai-analysis-grid">
+              {fields.map(([label, value]) => (
+                <div className="ad-ai-analysis-item" key={label}>
+                  <div className="ad-ai-analysis-icon blue"><Activity size={18} /></div>
+                  <div className="ad-ai-analysis-content">
+                    <span className="ad-ai-analysis-label">{label}</span>
+                    <strong className="ad-ai-analysis-value">{displayValue(value)}</strong>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {Array.isArray(nugenAnalysis.evidence) && nugenAnalysis.evidence.length > 0 && (
+              <div className="ad-ai-analysis-footer">
+                <strong>Evidence:</strong> {displayValue(nugenAnalysis.evidence)}
+              </div>
+            )}
+            <div className="ad-ai-analysis-footer">
+              <ShieldCheck size={15} />
+              <span>
+                Human review required: {nugenAnalysis.requires_human_review === false ? "Not flagged by model" : "Yes / not confirmed"}. NuGen provides decision support only; Python scoring and responder matching remain separate.
+              </span>
+            </div>
+          </>
+        )}
+      </section>
+    );
+  }
+
+  // --------------------------------------------------
+  // AI ANALYSIS PANEL (EXISTING PYTHON CLASSIFIER)
   // --------------------------------------------------
 
   function AIAnalysisPanel() {
@@ -1287,32 +1443,41 @@ export default function AdminDashboard({
     };
 
     const analysisItems = [
-      {
-        label: "Disaster Type",
-        value: aiAnalysis.disaster_type || "Unknown",
-        icon: <AlertTriangle size={18} />,
-        color: "blue",
-      },
-      {
-        label: "Urgency",
-        value: aiAnalysis.urgency || "Unknown",
-        icon: <Clock size={18} />,
-        color: "orange",
-      },
-      {
-        label: "Vulnerability",
-        value: listValue(aiAnalysis.vulnerability),
-        icon: <ShieldCheck size={18} />,
-        color: "purple",
-      },
-      {
-        label: "Required Help",
-        value: listValue(aiAnalysis.required_help),
-        icon: <UserCheck size={18} />,
-        color: "green",
-      },
-    ];
-
+  {
+    label: "Disaster Type",
+    value: aiAnalysis.disaster_type || "Unknown",
+    icon: <AlertTriangle size={18} />,
+    color: "blue",
+  },
+  {
+    label: "Urgency",
+    value: aiAnalysis.urgency || "Unknown",
+    icon: <Clock size={18} />,
+    color: "orange",
+  },
+  {
+    label: "Priority Score",
+    value:
+      selectedIncident?.priorityScore !== null &&
+      selectedIncident?.priorityScore !== undefined
+        ? selectedIncident.priorityScore
+        : "Not available",
+    icon: <Activity size={18} />,
+    color: "blue",
+  },
+  {
+    label: "Vulnerability",
+    value: listValue(aiAnalysis.vulnerability),
+    icon: <ShieldCheck size={18} />,
+    color: "purple",
+  },
+  {
+    label: "Required Help",
+    value: listValue(aiAnalysis.required_help),
+    icon: <UserCheck size={18} />,
+    color: "green",
+  },
+];
     return (
       <section className="ad-panel ad-ai-analysis-panel">
         <div className="ad-panel-heading">
@@ -2514,7 +2679,8 @@ export default function AdminDashboard({
 
         {isPendingSelected ? (
           <>
-            {/* AI ANALYSIS VISIBLE ONLY ON THIS PAGE */}
+            {/* NuGen language analysis and existing Python scoring stay separate. */}
+            <NuGenAnalysisPanel />
             <AIAnalysisPanel />
 
             <RecommendationPanel />

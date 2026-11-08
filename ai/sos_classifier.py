@@ -1,11 +1,24 @@
+
 # --------------------------------------------------
 # RES-Q CONNECT SOS MESSAGE CLASSIFIER
 # --------------------------------------------------
 
 
+def normalize_message(message):
+    """Convert the SOS message into searchable lowercase text."""
+    if not message:
+        return ""
+
+    return " ".join(str(message).lower().split())
+
+
+# --------------------------------------------------
+# DISASTER CLASSIFICATION
+# --------------------------------------------------
+
 def classify_disaster(message):
 
-    message = message.lower()
+    message = normalize_message(message)
 
     disaster_keywords = {
 
@@ -14,8 +27,11 @@ def classify_disaster(message):
             "flooding",
             "water entered",
             "water rising",
+            "rising water",
+            "water level is rising",
             "submerged",
-            "overflow"
+            "overflow",
+            "waterlogged"
         ],
 
         "landslide": [
@@ -23,15 +39,19 @@ def classify_disaster(message):
             "mudslide",
             "soil sliding",
             "rocks falling",
-            "hill collapsed"
+            "hill collapsed",
+            "debris flow"
         ],
 
         "cyclone": [
             "cyclone",
             "strong wind",
+            "strong winds",
             "heavy wind",
+            "heavy winds",
             "storm wind",
-            "roof blown"
+            "roof blown",
+            "roof blown away"
         ],
 
         "heatwave": [
@@ -39,21 +59,26 @@ def classify_disaster(message):
             "extreme heat",
             "very hot",
             "heat stroke",
-            "heatstroke"
+            "heatstroke",
+            "dehydration due to heat"
         ],
 
         "heavy_rainfall": [
             "heavy rain",
             "heavy rainfall",
             "continuous rain",
-            "raining heavily"
+            "raining heavily",
+            "heavy rains",
+            "continuous rainfall"
         ],
 
         "earthquake": [
             "earthquake",
             "tremor",
             "ground shaking",
-            "building shaking"
+            "building shaking",
+            "earth tremor",
+            "seismic activity"
         ]
     }
 
@@ -64,44 +89,52 @@ def classify_disaster(message):
         score = 0
 
         for keyword in keywords:
-
             if keyword in message:
                 score += 1
 
         scores[disaster_type] = score
-
 
     highest_score = max(scores.values())
 
     if highest_score == 0:
         return "unknown"
 
+    return max(scores, key=scores.get)
 
-    detected_disaster = max(
-        scores,
-        key=scores.get
-    )
 
-    return detected_disaster
 # --------------------------------------------------
 # URGENCY DETECTION
 # --------------------------------------------------
 
 def detect_urgency(message):
 
-    message = message.lower()
+    message = normalize_message(message)
 
     high_urgency_keywords = [
         "trapped",
         "injured",
+        "injury",
+        "head injury",
+        "leg injury",
         "unconscious",
         "bleeding",
-        "can't breathe",
         "cannot breathe",
+        "can't breathe",
+        "unable to breathe",
         "collapsed",
         "drowning",
         "life threatening",
-        "immediate help"
+        "life-threatening",
+        "immediate help",
+        "immediate danger",
+        "urgent help",
+        "urgently need",
+        "urgently",
+        "emergency rescue",
+        "unable to escape",
+        "cannot escape",
+        "rapidly rising water",
+        "water level is rising rapidly"
     ]
 
     medium_urgency_keywords = [
@@ -113,7 +146,12 @@ def detect_urgency(message):
         "road is blocked",
         "roads are blocked",
         "blocked road",
-        "power cut"
+        "power cut",
+        "unable to move",
+        "cannot move",
+        "cannot walk",
+        "unable to walk",
+        "evacuation required"
     ]
 
     for keyword in high_urgency_keywords:
@@ -133,7 +171,7 @@ def detect_urgency(message):
 
 def detect_vulnerability(message):
 
-    message = message.lower()
+    message = normalize_message(message)
 
     vulnerability_keywords = {
 
@@ -141,14 +179,22 @@ def detect_vulnerability(message):
             "child",
             "children",
             "baby",
-            "infant"
+            "babies",
+            "infant",
+            "infants",
+            "toddler",
+            "toddlers"
         ],
 
         "elderly": [
             "elderly",
             "old person",
+            "old man",
+            "old woman",
             "grandmother",
-            "grandfather"
+            "grandfather",
+            "senior citizen",
+            "senior citizens"
         ],
 
         "pregnant": [
@@ -158,13 +204,46 @@ def detect_vulnerability(message):
 
         "injured": [
             "injured",
+            "injury",
+            "injuries",
             "bleeding",
-            "wounded"
+            "wounded",
+            "hurt",
+            "fracture",
+            "fractured"
         ],
 
         "trapped": [
             "trapped",
-            "stuck"
+            "stuck",
+            "unable to escape",
+            "cannot escape",
+            "pinned under",
+            "buried under"
+        ],
+
+        "mobility_limited": [
+            "unable to move",
+            "cannot move",
+            "can't move",
+            "unable to walk",
+            "cannot walk",
+            "can't walk",
+            "mobility issues",
+            "mobility problems",
+            "limited mobility",
+            "difficulty walking",
+            "cannot stand",
+            "unable to stand",
+            "wheelchair"
+        ],
+
+        "disabled": [
+            "person with a disability",
+            "person with disabilities",
+            "people with disabilities",
+            "disabled person",
+            "disabled people"
         ]
     }
 
@@ -187,7 +266,7 @@ def detect_vulnerability(message):
 
 def detect_required_help(message):
 
-    message = message.lower()
+    message = normalize_message(message)
 
     help_keywords = {
 
@@ -195,35 +274,53 @@ def detect_required_help(message):
             "medical",
             "ambulance",
             "injured",
+            "injury",
+            "injuries",
             "bleeding",
             "unconscious",
-            "collapse",
-            "collapsed"
+            "head injury",
+            "leg injury",
+            "fracture",
+            "first aid",
+            "medical assistance",
+            "medical help",
+            "doctor",
+            "hospital"
         ],
 
         "rescue": [
             "rescue",
             "trapped",
             "stuck",
-            "drowning"
+            "drowning",
+            "search and rescue",
+            "search-rescue",
+            "unable to escape",
+            "cannot escape",
+            "evacuation support"
         ],
 
         "food": [
             "food",
-            "hungry"
+            "hungry",
+            "food supplies",
+            "food distribution"
         ],
 
         "water": [
             "drinking water",
             "no water",
-            "thirsty"
+            "thirsty",
+            "water supplies"
         ],
 
         "shelter": [
             "shelter",
             "homeless",
             "house destroyed",
-            "home destroyed"
+            "home destroyed",
+            "temporary shelter",
+            "evacuation shelter"
         ]
     }
 
@@ -238,6 +335,8 @@ def detect_required_help(message):
                 break
 
     return detected
+
+
 # --------------------------------------------------
 # COMPLETE SOS ANALYSIS
 # --------------------------------------------------
@@ -251,6 +350,7 @@ def analyze_sos(message):
         "required_help": detect_required_help(message)
     }
 
+
 # --------------------------------------------------
 # TEST MULTIPLE SOS MESSAGES
 # --------------------------------------------------
@@ -262,7 +362,7 @@ if __name__ == "__main__":
         "Flood water is rising inside our house. "
         "Two children are trapped upstairs.",
 
-        "There was an earthquake. A person is injured "
+        "There was an earthquake. A person has a head injury "
         "and needs an ambulance.",
 
         "Continuous heavy rain since morning and "
@@ -276,35 +376,28 @@ if __name__ == "__main__":
 
         "An elderly man collapsed because of extreme heat.",
 
-        "Please help us, we are trapped."
+        "Please help us, we are trapped.",
+
+        "A strong earthquake has struck our residential area. "
+        "Part of a three-storey building has collapsed, and "
+        "around 6 people are trapped under the damaged structure. "
+        "One person has a head injury, and another person is "
+        "unable to move due to a leg injury. We urgently need "
+        "a search and rescue team, an ambulance, medical assistance "
+        "and evacuation support."
     ]
 
     print("RES-Q CONNECT SOS CLASSIFIER TEST")
     print("================================")
 
-    for number, message in enumerate(
-        test_messages,
-        start=1
-    ):
+    for number, message in enumerate(test_messages, start=1):
 
         result = analyze_sos(message)
 
         print(f"\nTEST {number}")
         print("--------------------------------")
         print("Message:", message)
-        print(
-            "Disaster Type:",
-            result["disaster_type"]
-        )
-        print(
-            "Urgency:",
-            result["urgency"]
-        )
-        print(
-            "Vulnerability:",
-            result["vulnerability"]
-        )
-        print(
-            "Required Help:",
-            result["required_help"]
-        )
+        print("Disaster Type:", result["disaster_type"])
+        print("Urgency:", result["urgency"])
+        print("Vulnerability:", result["vulnerability"])
+        print("Required Help:", result["required_help"])

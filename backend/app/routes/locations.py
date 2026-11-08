@@ -10,13 +10,19 @@ from app.auth import require_admin
 router = APIRouter(prefix="/locations", tags=["Locations"])
 
 
-# Get locations of SOS cases, disaster alerts, and responders
+# --------------------------------------------------
+# GET LOCATIONS OF SOS CASES, ALERTS AND RESPONDERS
+# --------------------------------------------------
+
 @router.get("/")
-def get_locations(db: Session = Depends(get_db), _admin: User = Depends(require_admin)):
+def get_locations(
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin)
+):
     try:
         locations = []
 
-        # Get SOS case locations
+        # SOS case locations
         cases = db.query(SOSCase).all()
 
         for case in cases:
@@ -30,7 +36,7 @@ def get_locations(db: Session = Depends(get_db), _admin: User = Depends(require_
                 "urgency": case.urgency
             })
 
-        # Get disaster alert locations
+        # Disaster alert locations
         alerts = db.query(RiskAlert).all()
 
         for alert in alerts:
@@ -43,7 +49,7 @@ def get_locations(db: Session = Depends(get_db), _admin: User = Depends(require_
                 "status": alert.alert_level
             })
 
-        # Get responder locations
+        # Responder locations
         responders = db.query(Responder).all()
 
         for responder in responders:
@@ -53,7 +59,9 @@ def get_locations(db: Session = Depends(get_db), _admin: User = Depends(require_
                 "latitude": responder.latitude,
                 "longitude": responder.longitude,
                 "title": responder.name,
-                "status": responder.responder_status
+                "status": responder.responder_status,
+                "skills": responder.skills,
+                "equipment": responder.equipment
             })
 
         return {"locations": locations}
@@ -65,7 +73,10 @@ def get_locations(db: Session = Depends(get_db), _admin: User = Depends(require_
         )
 
 
-# Find available responders within a specified distance
+# --------------------------------------------------
+# FIND AVAILABLE RESPONDERS WITHIN A SPECIFIED DISTANCE
+# --------------------------------------------------
+
 @router.get("/nearby-responders")
 def get_nearby_responders(
     latitude: float = Query(..., ge=-90, le=90),
@@ -89,7 +100,12 @@ def get_nearby_responders(
                 Responder,
                 distance.label("distance_meters")
             )
-            .filter(Responder.responder_status == "available")
+            .filter(
+                Responder.responder_status == "available"
+            )
+            .filter(
+                Responder.location.isnot(None)
+            )
             .filter(
                 func.ST_DWithin(
                     Responder.location,
@@ -110,7 +126,11 @@ def get_nearby_responders(
                 "status": responder.responder_status,
                 "latitude": responder.latitude,
                 "longitude": responder.longitude,
-                "distance_meters": round(float(distance_meters), 2)
+                "skills": responder.skills,
+                "equipment": responder.equipment,
+                "distance_meters": round(
+                    float(distance_meters), 2
+                )
             })
 
         return {
